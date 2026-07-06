@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 <title>משחק — כושרמט</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>♞</text></svg>">
-<link rel="stylesheet" href="css/style.css?v=9" />
+<link rel="stylesheet" href="css/style.css?v=10" />
 </head>
 <body>
   <nav class="navbar" id="navbar"></nav>
@@ -2416,6 +2416,7 @@ async function makeMove(from, to, promotion) {
   const move = chess.move({ from, to, promotion });
   if (!move) return;
 
+  const previousLastMoveSquares = lastMoveSquares;
   selectedSquare = null;
   legalTargets = [];
   lastMoveSquares = [from, to];
@@ -2444,7 +2445,13 @@ async function makeMove(from, to, promotion) {
 
   const { error } = await sb.from("games").update(update).eq("id", GAME_ID);
   if (error) {
-    toast("שגיאה בשליחת המהלך", "error");
+    // המהלך לא נשמר בפועל בשרת - מבטלים אותו גם מקומית כדי לא להטעות
+    // את השחקן, ומציגים את השגיאה האמיתית (לצורך אבחון) במקום הודעה כללית
+    chess.undo();
+    lastMoveSquares = previousLastMoveSquares;
+    renderBoard();
+    renderMoveList();
+    toast("שגיאה בשליחת המהלך: " + (error.message || error.details || JSON.stringify(error)), "error");
     return;
   }
   Object.assign(GAME, update);

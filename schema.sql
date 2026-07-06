@@ -143,6 +143,7 @@ create table if not exists games (
   fen text not null default 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1',
   pgn text not null default '',
   last_move text,
+  last_move_at timestamptz not null default now(),
   status text not null default 'active', -- active | checkmate | draw | resigned | timeout | aborted
   winner_id uuid references profiles(id),
   turn text not null default 'w',
@@ -152,6 +153,19 @@ create table if not exists games (
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+-- מיגרציות בטוחות להרצה חוזרת: "create table if not exists" למעלה הוא no-op
+-- אם הטבלה כבר קיימת מריצה קודמת של הסכימה - כך שעמודות שנוספו בהמשך הפיתוח
+-- (last_move_at, winner_id, turn, הטיימרים, הצעת תיקו, updated_at) עלולות
+-- להיות חסרות בפועל אצל מי שהריץ גרסה ישנה יותר. השורות הבאות מוודאות
+-- שכל העמודות קיימות, בלי לגעת בנתונים קיימים.
+alter table games add column if not exists last_move_at timestamptz not null default now();
+alter table games add column if not exists winner_id uuid references profiles(id);
+alter table games add column if not exists turn text not null default 'w';
+alter table games add column if not exists white_time_ms int not null default 600000;
+alter table games add column if not exists black_time_ms int not null default 600000;
+alter table games add column if not exists draw_offered_by uuid references profiles(id);
+alter table games add column if not exists updated_at timestamptz not null default now();
 
 alter table games enable row level security;
 
