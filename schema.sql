@@ -513,6 +513,28 @@ end;
 $$;
 
 -- ============================================================
+-- פונקציית ניהול: ביטול כל המשחקים החיים בבת אחת ע"י מנהל
+-- (ללא שינוי דירוג לאף שחקן) - מחזירה כמה משחקים בוטלו
+-- ============================================================
+create or replace function admin_abort_all_games()
+returns int
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  affected int;
+begin
+  if not exists (select 1 from profiles where id = auth.uid() and is_admin) then
+    raise exception 'not authorized';
+  end if;
+  update games set status = 'aborted' where status = 'active';
+  get diagnostics affected = row_count;
+  return affected;
+end;
+$$;
+
+-- ============================================================
 -- אתגר משחק אישי (הזמנת שחקן ספציפי למשחק)
 -- ============================================================
 create table if not exists game_invites (

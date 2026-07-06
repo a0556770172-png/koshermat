@@ -23,7 +23,22 @@ let ME = null;
   await loadGames();
 
   document.getElementById("user-search").addEventListener("input", (e) => renderUsers(e.target.value.trim().toLowerCase()));
+
+  document.getElementById("abort-all-games-btn").addEventListener("click", abortAllGames);
 })();
+
+async function abortAllGames() {
+  if (!confirm("לבטל את כל המשחקים החיים? הפעולה בלתי הפיכה ולא תשפיע על דירוג השחקנים.")) return;
+  const { data, error } = await sb.rpc("admin_abort_all_games");
+  if (error) {
+    toast("שגיאה: " + error.message, "error");
+    return;
+  }
+  toast(`בוטלו ${data ?? 0} משחקים`, "success");
+  await loadGames();
+  await loadStats();
+}
+window.abortAllGames = abortAllGames;
 
 function wireTabs() {
   document.querySelectorAll(".tab-btn[data-tab]").forEach((btn) => {
