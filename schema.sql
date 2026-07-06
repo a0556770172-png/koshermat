@@ -25,8 +25,14 @@ create table if not exists profiles (
   is_admin boolean not null default false,
   is_banned boolean not null default false,
   banned_reason text,
+  banned_at timestamptz,
+  appeals_blocked boolean not null default false,
   created_at timestamptz not null default now()
 );
+
+-- מיגרציה בטוחה להרצה חוזרת (למקרה שהטבלה כבר קיימת מריצה קודמת)
+alter table profiles add column if not exists banned_at timestamptz;
+alter table profiles add column if not exists appeals_blocked boolean not null default false;
 
 alter table profiles enable row level security;
 
@@ -60,6 +66,8 @@ begin
     new.is_admin := old.is_admin;
     new.is_banned := old.is_banned;
     new.banned_reason := old.banned_reason;
+    new.banned_at := old.banned_at;
+    new.appeals_blocked := old.appeals_blocked;
   end if;
   return new;
 end;
@@ -326,6 +334,48 @@ create policy "admins can update reports" on reports
   for update using (exists (select 1 from profiles p where p.id = auth.uid() and p.is_admin));
 
 -- ============================================================
+-- ערעורים על חסימה
+-- ============================================================
+create table if not exists ban_appeals (
+  id uuid primary key default uuid_generate_v4(),
+  user_id uuid references profiles(id) on delete cascade,
+  message text not null,
+  status text not null default 'open', -- open | reviewed | dismissed
+  created_at timestamptz not null default now(),
+  reviewed_by uuid references profiles(id),
+  reviewed_at timestamptz
+);
+
+alter table ban_appeals enable row level security;
+
+drop policy if exists "users view own appeals, admins view all" on ban_appeals;
+create policy "users view own appeals, admins view all" on ban_appeals
+  for select using (
+    auth.uid() = user_id
+    or exists (select 1 from profiles p where p.id = auth.uid() and p.is_admin)
+  );
+
+drop policy if exists "banned users can submit appeal" on ban_appeals;
+create policy "banned users can submit appeal" on ban_appeals
+  for insert with check (
+    auth.uid() = user_id
+    and exists (
+      select 1 from profiles p
+      where p.id = auth.uid() and p.is_banned and not p.appeals_blocked
+    )
+  );
+
+drop policy if exists "admins can update appeals" on ban_appeals;
+create policy "admins can update appeals" on ban_appeals
+  for update using (exists (select 1 from profiles p where p.id = auth.uid() and p.is_admin));
+
+do $$
+begin
+  execute 'alter publication supabase_realtime add table ban_appeals';
+exception when duplicate_object then null;
+end $$;
+
+-- ============================================================
 -- פונקציה: סיום משחק, עדכון ELO, ניקוד, סטרייקים ומדליות
 -- ============================================================
 create or replace function finish_game(p_game_id uuid, p_status text, p_winner_id uuid)
@@ -490,7 +540,36 @@ begin
     raise exception 'not authorized';
   end if;
   perform set_config('app.bypass_protect', 'on', true);
-  update profiles set is_banned = p_banned, banned_reason = p_reason where id = p_target;
+  update profiles set
+    is_banned = p_banned,
+    banned_reason = p_reason,
+    banned_at = case when p_banned then now() else null end
+  where id = p_target;
+  -- ביטול חסימה מנקה גם את חסימת הערעורים, כדי שאם ייחסם שוב בעתיד
+  -- הוא יוכל לשלוח ערעור חדש מההתחלה
+  if not p_banned then
+    update profiles set appeals_blocked = false where id = p_target;
+  end if;
+  perform set_config('app.bypass_protect', 'off', true);
+end;
+$$;
+
+-- ============================================================
+-- פונקציית ניהול: חסימת/ביטול חסימת אפשרות לשלוח ערעורים נוספים
+-- (למקרה של חפירה/spam מצד משתמש חסום)
+-- ============================================================
+create or replace function admin_set_appeals_blocked(p_target uuid, p_blocked boolean)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not exists (select 1 from profiles where id = auth.uid() and is_admin) then
+    raise exception 'not authorized';
+  end if;
+  perform set_config('app.bypass_protect', 'on', true);
+  update profiles set appeals_blocked = p_blocked where id = p_target;
   perform set_config('app.bypass_protect', 'off', true);
 end;
 $$;

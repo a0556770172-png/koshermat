@@ -150,9 +150,9 @@ async function requireAuth(redirectIfBanned = true) {
     return null;
   }
   if (profile.is_banned && redirectIfBanned) {
-    toast("חשבונך הושעה: " + (profile.banned_reason || "הפרת כללי הקהילה"), "error");
-    await sb.auth.signOut();
-    window.location.href = "auth.html";
+    // לא מתנתקים מיד - מעבירים למסך חסימה ייעודי שמציג את הסיבה
+    // ומאפשר לשלוח ערעור, כדי שהמשתמש יידע בדיוק למה נחסם ולא רק "נזרק" החוצה
+    window.location.href = "banned.html";
     return null;
   }
 

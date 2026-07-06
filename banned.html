@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>חשבון מושעה — כושרמט</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>♞</text></svg>">
+<link rel="stylesheet" href="css/style.css?v=13" />
+</head>
+<body>
+  <div class="center-page page-enter">
+    <div class="card" style="width:100%; max-width:460px;">
+      <div class="text-center mt-1" style="margin-bottom:18px;">
+        <div style="font-size:44px;">🚫</div>
+        <div class="brand-text" style="font-size:24px; font-weight:900;">החשבון שלך הושעה</div>
+      </div>
+
+      <div class="card" style="background:var(--glass); border:1px solid var(--danger); margin-bottom:18px;">
+        <div class="muted" style="font-size:13px; margin-bottom:6px;">סיבת ההשעיה:</div>
+        <div id="ban-reason" style="font-weight:700;"></div>
+        <div class="muted" id="ban-date" style="font-size:12px; margin-top:8px;"></div>
+      </div>
+
+      <div id="appeal-area"></div>
+
+      <button class="btn btn-ghost btn-block mt-2" id="logout-btn">🚪 התנתק</button>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="js/supabaseClient.js?v=13"></script>
+  <script src="js/ui.js?v=13"></script>
+  <script src="js/banned.js?v=13"></script>
+</body>
+</html>
