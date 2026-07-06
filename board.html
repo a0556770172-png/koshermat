@@ -2462,13 +2462,25 @@ async function finishGame(status, winnerId) {
 // גם אם שאר האתר עובד תקין. לכן, בנוסף להאזנה בזמן-אמת, יש גם בדיקה
 // יזומה (polling) כל כמה שניות שמושכת את מצב המשחק ישירות - כדי שהמהלכים
 // של היריב יגיעו גם אם ה-WebSocket חסום.
-let lastKnownUpdatedAt = null;
+// חשוב: אין להסתמך על עמודת updated_at לצורך זיהוי כפילויות - היא תלויה
+// בטריגר בבסיס הנתונים (touch_games_updated_at) שאולי לא רץ אצל כל משתמש
+// אם ה-schema לא הורץ מחדש. במקום זאת, משווים את התוכן בפועל (fen/status/הצעת תיקו) -
+// כך שהמהלך תמיד יתקבל אצל היריב גם אם הטריגר לא קיים.
+let lastAppliedFen = null;
+let lastAppliedStatus = null;
+let lastAppliedDrawOfferedBy = null;
 
 function applyGameUpdate(newRow) {
-  if (lastKnownUpdatedAt && newRow.updated_at && newRow.updated_at <= lastKnownUpdatedAt) {
-    return; // כבר טיפלנו בעדכון הזה
+  const unchanged =
+    lastAppliedFen === newRow.fen &&
+    lastAppliedStatus === newRow.status &&
+    lastAppliedDrawOfferedBy === newRow.draw_offered_by;
+  if (unchanged) {
+    return; // באמת שום דבר לא השתנה
   }
-  lastKnownUpdatedAt = newRow.updated_at;
+  lastAppliedFen = newRow.fen;
+  lastAppliedStatus = newRow.status;
+  lastAppliedDrawOfferedBy = newRow.draw_offered_by;
 
   const wasActive = GAME.status === "active";
   Object.assign(GAME, newRow);
@@ -2494,7 +2506,9 @@ function applyGameUpdate(newRow) {
 }
 
 function subscribeGame() {
-  lastKnownUpdatedAt = GAME.updated_at;
+  lastAppliedFen = GAME.fen;
+  lastAppliedStatus = GAME.status;
+  lastAppliedDrawOfferedBy = GAME.draw_offered_by;
 
   sb.channel("game-" + GAME_ID)
     .on(
