@@ -31,6 +31,9 @@ html, body {
   color: var(--text);
   background: var(--bg-1);
   overflow-x: hidden;
+  /* מונע "משיכה לרענון" (pull-to-refresh) בדפדפני מובייל -
+     בלעדיו, הקשה/גרירה קלה על הלוח עלולה להיראות כאילו "הדף התרענן" */
+  overscroll-behavior-y: contain;
 }
 
 body {
@@ -411,6 +414,8 @@ label { font-size: 13px; color: var(--text-dim); margin-bottom: 6px; display: bl
   border-radius: 14px;
   overflow: hidden;
   box-shadow: 0 20px 60px rgba(0,0,0,.55), 0 0 0 6px rgba(255,255,255,.04);
+  touch-action: manipulation;
+  overscroll-behavior: contain;
 }
 .square {
   position: relative;
@@ -418,6 +423,11 @@ label { font-size: 13px; color: var(--text-dim); margin-bottom: 6px; display: bl
   font-size: min(7vw, 42px);
   cursor: pointer;
   user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  /* מונע זום בהקשה כפולה וג'סטורות מגע שמתנגשות עם הקשה על משבצת -
+     זו הסיבה השכיחה לכך שהקשה על כלי "מרעננת" את הדף ולא בוחרת אותו */
+  touch-action: manipulation;
 }
 .square.light { background: #2b3563; }
 .square.dark { background: #1a2140; }
