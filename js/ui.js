@@ -209,6 +209,17 @@ function listenForGameInvites(myId) {
         }
       }
     )
+    .on(
+      "postgres_changes",
+      { event: "UPDATE", schema: "public", table: "game_invites" },
+      (payload) => {
+        // מי ששלח את האתגר צריך גם הוא לעבור למשחק ברגע שהצד השני קיבל אותו
+        if (payload.new.from_user === myId && payload.new.status === "accepted" && payload.new.game_id) {
+          toast("האתגר התקבל! מעביר אותך למשחק...", "success");
+          setTimeout(() => goToGame(payload.new.game_id), 400);
+        }
+      }
+    )
     .subscribe();
 }
 

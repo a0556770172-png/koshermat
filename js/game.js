@@ -27,26 +27,38 @@ const GAME_ID =
   new URLSearchParams(location.search).get("id");
 
 (async function init() {
-  const auth = await requireAuth();
-  if (!auth) return;
-  ME = auth.profile;
-  renderNav("", ME);
+  try {
+    const auth = await requireAuth();
+    if (!auth) return;
+    ME = auth.profile;
+    renderNav("", ME);
 
-  if (!GAME_ID) {
-    toast("לא נמצא משחק", "error");
-    setTimeout(() => (location.href = "lobby.html"), 800);
-    return;
+    if (!GAME_ID) {
+      showFatalError("לא נמצא מזהה משחק. אם הגעת לכאן ישירות (לא דרך כפתור באתר), חזור ללובי ונסה שוב.");
+      return;
+    }
+
+    await loadGame();
+    if (!GAME) return;
+
+    subscribeGame();
+    await loadChat();
+    subscribeChat();
+    startTimerLoop();
+    wireControls();
+  } catch (err) {
+    console.error(err);
+    showFatalError("שגיאה בטעינת המשחק: " + (err && err.message ? err.message : String(err)));
   }
-
-  await loadGame();
-  if (!GAME) return;
-
-  subscribeGame();
-  await loadChat();
-  subscribeChat();
-  startTimerLoop();
-  wireControls();
 })();
+
+function showFatalError(message) {
+  toast(message, "error");
+  const boardEl = document.getElementById("board");
+  if (boardEl) {
+    boardEl.innerHTML = `<div style="grid-column:1/-1; display:flex; align-items:center; justify-content:center; padding:20px; text-align:center; color:var(--danger); font-weight:700;">${escapeHtml(message)}</div>`;
+  }
+}
 
 async function loadGame() {
   const { data, error } = await sb
@@ -56,8 +68,8 @@ async function loadGame() {
     .single();
 
   if (error || !data) {
-    toast("המשחק לא נמצא", "error");
-    setTimeout(() => (location.href = "lobby.html"), 800);
+    showFatalError("המשחק לא נמצא" + (error ? " (" + error.message + ")" : "") + ". חוזר ללובי...");
+    setTimeout(() => (location.href = "lobby.html"), 3000);
     return;
   }
   GAME = data;
