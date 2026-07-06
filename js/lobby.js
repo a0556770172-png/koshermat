@@ -133,7 +133,7 @@ function watchForMatch() {
         const g = payload.new;
         if (g.white_id === ME.id || g.black_id === ME.id) {
           toast("נמצא יריב! מעביר אותך למשחק...", "success");
-          setTimeout(() => (window.location.href = "game.html#" + g.id), 700);
+          setTimeout(() => goToGame(g.id), 700);
         }
       }
     )
@@ -160,7 +160,7 @@ function renderLiveGames(games) {
   list.innerHTML = games
     .map(
       (g) => `
-      <div class="game-list-item" onclick="location.href='game.html#${g.id}'">
+      <div class="game-list-item" onclick="goToGame('${g.id}')">
         <span>${g.white?.username || "?"} (${g.white?.rating ?? "-"}) ⚔️ ${g.black?.username || "?"} (${g.black?.rating ?? "-"})</span>
         <span class="btn btn-ghost" style="padding:6px 12px; font-size:12px;">👁️ צפייה</span>
       </div>`

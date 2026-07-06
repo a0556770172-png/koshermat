@@ -161,6 +161,15 @@ async function requireAuth(redirectIfBanned = true) {
   return { session, profile };
 }
 
+// ---------------- ניווט למשחק בלי מזהה בכתובת ----------------
+// כדי שהכתובת תישאר נקייה (game.html בלבד, בלי id/# עם מספרים) -
+// שומרים את מזהה המשחק בזיכרון הדפדפן (sessionStorage) ולא בכתובת עצמה.
+function goToGame(gameId) {
+  sessionStorage.setItem("koshermat_game_id", gameId);
+  location.href = "game.html";
+}
+window.goToGame = goToGame;
+
 // ---------------- אתגר משחק אישי (הזמנות) ----------------
 async function sendGameInvite(myId, targetId, targetName) {
   if (myId === targetId) {
@@ -256,7 +265,7 @@ async function showInviteBanner(inv) {
       return;
     }
     toast("האתגר התקבל! מעביר אותך למשחק...", "success");
-    setTimeout(() => (location.href = "game.html#" + data), 500);
+    setTimeout(() => goToGame(data), 500);
   });
 
   document.getElementById(`decline-inv-${inv.id}`).addEventListener("click", async () => {

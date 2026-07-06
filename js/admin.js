@@ -118,7 +118,7 @@ async function loadReports() {
         <div>
           <div><b>${escapeHtml(r.reporter?.username || "?")}</b> דיווח/ה על <b>${escapeHtml(r.reported?.username || "?")}</b></div>
           <div class="muted mt-1">${escapeHtml(r.reason)}</div>
-          <div class="muted" style="font-size:12px; margin-top:4px;">${timeAgo(r.created_at)}${r.game_id ? ` · <a href="game.html#${r.game_id}">צפייה במשחק</a>` : ""}</div>
+          <div class="muted" style="font-size:12px; margin-top:4px;">${timeAgo(r.created_at)}${r.game_id ? ` · <a href="javascript:void(0)" onclick="goToGame('${r.game_id}')">צפייה במשחק</a>` : ""}</div>
         </div>
         <span class="badge ${r.status}">${{ open: "פתוח", reviewed: "נבדק", dismissed: "נדחה", actioned: "טופל" }[r.status] || r.status}</span>
       </div>
@@ -172,7 +172,7 @@ async function loadGames() {
     <div class="game-list-item">
       <span>${escapeHtml(g.white?.username || "?")} ⚔️ ${escapeHtml(g.black?.username || "?")} · ${timeAgo(g.created_at)}</span>
       <div class="flex gap-1">
-        <a href="game.html#${g.id}" class="btn btn-ghost" style="padding:6px 12px; font-size:12px;">צפייה</a>
+        <a href="javascript:void(0)" onclick="goToGame('${g.id}')" class="btn btn-ghost" style="padding:6px 12px; font-size:12px;">צפייה</a>
         <button class="btn btn-danger" style="padding:6px 12px; font-size:12px;" onclick="abortGame('${g.id}')">בטל משחק</button>
       </div>
     </div>`

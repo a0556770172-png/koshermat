@@ -18,8 +18,13 @@ let gameEnded = false;
 let timerInterval = null;
 let pendingPromotion = null;
 
-// תמיכה גם בקישור ישן (?id=) וגם בקישור החדש (#id) - בלי המילה "id=" בכתובת
-const GAME_ID = decodeURIComponent(location.hash.slice(1)) || new URLSearchParams(location.search).get("id");
+// מזהה המשחק נשמר בזיכרון הדפדפן (לא בכתובת) כדי שהכתובת תישאר נקייה
+// (מותאם גם לרשתות עם סינון תוכן שחוסם כתובות עם מחרוזות מספרים ארוכות).
+// יש גם תמיכה בקישורים ישנים (#id או ?id=) למקרה שמישהו כבר שמר כאלה.
+const GAME_ID =
+  sessionStorage.getItem("koshermat_game_id") ||
+  decodeURIComponent(location.hash.slice(1)) ||
+  new URLSearchParams(location.search).get("id");
 
 (async function init() {
   const auth = await requireAuth();
