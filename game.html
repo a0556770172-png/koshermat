@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>משחק — כושרמט</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>♞</text></svg>">
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <nav class="navbar" id="navbar"></nav>
+
+  <div class="wrap page-enter">
+    <div class="game-layout">
+
+      <!-- עמודה ימנית: מהלכים + בקרות -->
+      <div class="flex flex-col gap-2">
+        <div class="card">
+          <div class="section-title" style="font-size:16px;">📜 מהלכים</div>
+          <div class="move-list" id="move-list"></div>
+        </div>
+        <div class="card flex gap-1" id="game-controls" style="display:none;">
+          <button class="btn btn-ghost" id="draw-btn" style="flex:1;">🤝 הצע תיקו</button>
+          <button class="btn btn-danger" id="resign-btn" style="flex:1;">🏳️ כניעה</button>
+        </div>
+        <div class="card">
+          <button class="btn btn-ghost btn-block" id="report-btn">🚩 דווח על יריב</button>
+        </div>
+      </div>
+
+      <!-- מרכז: הלוח -->
+      <div class="board-wrap">
+        <div class="flex" style="justify-content:space-between; width:min(560px,92vw); margin-bottom:8px;">
+          <div id="black-name" style="font-weight:700;"></div>
+          <div class="timer" id="black-timer-wrap"><span id="black-timer">10:00</span></div>
+        </div>
+
+        <div id="draw-banner" class="card flex" style="justify-content:space-between; align-items:center; width:min(560px,92vw); margin-bottom:8px; display:none; padding:12px 18px;"></div>
+
+        <div class="board" id="board"></div>
+
+        <div class="flex" style="justify-content:space-between; width:min(560px,92vw); margin-top:8px;">
+          <div id="white-name" style="font-weight:700;"></div>
+          <div class="timer" id="white-timer-wrap"><span id="white-timer">10:00</span></div>
+        </div>
+      </div>
+
+      <!-- עמודה שמאלית: צ'אט -->
+      <div class="card">
+        <div class="section-title" style="font-size:16px;">💬 צ'אט משחק</div>
+        <div class="chat-box">
+          <div class="chat-messages" id="chat-messages"></div>
+          <form id="chat-form" class="chat-input-row">
+            <input type="text" id="chat-input" placeholder="כתוב הודעה..." autocomplete="off" />
+            <button type="submit" class="btn btn-accent" style="padding:10px 16px;">שלח</button>
+          </form>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- מודל הכתרה -->
+  <div class="overlay" id="promo-overlay" style="display:none;">
+    <div class="card">
+      <div class="section-title" style="font-size:16px;">בחר חייל להכתרה</div>
+      <div class="promo-choices" id="promo-choices"></div>
+    </div>
+  </div>
+
+  <!-- מודל סיום משחק -->
+  <div class="overlay" id="end-overlay" style="display:none;">
+    <div class="card">
+      <div style="font-size:40px;" id="end-title"></div>
+      <p class="muted mt-1" id="end-subtitle"></p>
+      <div class="flex gap-1 mt-2" style="justify-content:center;">
+        <a href="lobby.html" class="btn btn-primary">חזרה ללובי</a>
+        <a href="leaderboard.html" class="btn btn-ghost">טבלת דירוג</a>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+  <script src="js/supabaseClient.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/game.js"></script>
+</body>
+</html>

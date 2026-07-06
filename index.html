@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>כושרמט — פלטפורמת השחמט התחרותית</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>♞</text></svg>">
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <nav class="navbar">
+    <a href="index.html" class="brand">
+      <span class="logo-piece">♞</span>
+      <span class="brand-text">כושרמט</span>
+    </a>
+    <div class="nav-links" id="guest-links">
+      <a href="auth.html">התחברות</a>
+      <a href="auth.html" class="btn btn-primary" style="padding:9px 18px;">התחל לשחק</a>
+    </div>
+  </nav>
+
+  <div class="hero page-enter">
+    <div class="floating-pieces" id="floating"></div>
+    <div style="position:relative; z-index:1;">
+      <h1>שחמט. תחרות.<br/>קהילה אחת.</h1>
+      <p class="subtitle">
+        כושרמט היא הזירה שבה אתה משחק שחמט בזמן אמת נגד יריבים מכל העולם,
+        צובר נקודות ודירוג, עולה בדרגות, זוכה במדליות — ומשוחח עם הקהילה תוך כדי משחק.
+      </p>
+      <div class="hero-cta">
+        <a href="auth.html" class="btn btn-primary">🎮 הרשמה חינם</a>
+        <a href="auth.html" class="btn btn-ghost">כניסה לחשבון קיים</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <div class="features-grid">
+      <div class="card card-hover feature-card">
+        <span class="icon">⚔️</span>
+        <h3>שידוך יריבים חכם</h3>
+        <p>מערכת Matchmaking שמחברת אותך לשחקן ברמת דירוג דומה, בזמן אמת.</p>
+      </div>
+      <div class="card card-hover feature-card">
+        <span class="icon">📈</span>
+        <h3>דירוג ELO ודרגות</h3>
+        <p>כל ניצחון מקדם אותך בדירוג ובסולם דרגות - מ"מתחיל" ועד "גרנדמאסטר".</p>
+      </div>
+      <div class="card card-hover feature-card">
+        <span class="icon">🏅</span>
+        <h3>מדליות והישגים</h3>
+        <p>פרוץ רצפי ניצחונות, הגע לאבני דרך ואסוף מדליות ייחודיות לפרופיל שלך.</p>
+      </div>
+      <div class="card card-hover feature-card">
+        <span class="icon">💬</span>
+        <h3>צ'אט חי</h3>
+        <p>שוחח עם היריב תוך כדי משחק, ועם כל הקהילה בלובי הראשי.</p>
+      </div>
+      <div class="card card-hover feature-card">
+        <span class="icon">🛡️</span>
+        <h3>פיקוח וניהול</h3>
+        <p>מערכת דיווחים ומודרציה שמשמרת סביבת משחק הוגנת ונקייה.</p>
+      </div>
+      <div class="card card-hover feature-card">
+        <span class="icon">✨</span>
+        <h3>עיצוב חי ומונפש</h3>
+        <p>לוח שחמט מונפש, אפקטים חזותיים, וממשק מודרני שמרגיש כמו משחק.</p>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="js/supabaseClient.js"></script>
+  <script src="js/ui.js"></script>
+  <script>
+    spawnFloatingPieces(document.getElementById("floating"), 16);
+    (async () => {
+      const { data: { session } } = await sb.auth.getSession();
+      if (session) {
+        document.getElementById("guest-links").innerHTML = `
+          <a href="lobby.html" class="btn btn-primary" style="padding:9px 18px;">כניסה ללובי →</a>
+        `;
+      }
+    })();
+  </script>
+</body>
+</html>

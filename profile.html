@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>פרופיל — כושרמט</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>♞</text></svg>">
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <nav class="navbar" id="navbar"></nav>
+
+  <div class="wrap page-enter">
+    <div class="lobby-grid" style="grid-template-columns: 320px 1fr;">
+      <div class="flex flex-col gap-2">
+        <div class="card text-center" id="profile-header"></div>
+        <div class="card" id="stats-box"></div>
+      </div>
+
+      <div class="flex flex-col gap-2">
+        <div class="card">
+          <div class="section-title" style="font-size:16px;">🏅 מדליות</div>
+          <div class="medal-grid" id="medal-grid"></div>
+        </div>
+
+        <div class="card">
+          <div class="section-title" style="font-size:16px;">📜 היסטוריית משחקים</div>
+          <div id="history-list"></div>
+        </div>
+
+        <div class="card" id="edit-section" style="display:none;">
+          <div class="section-title" style="font-size:16px;">⚙️ עריכת פרופיל</div>
+          <form id="edit-form" class="flex flex-col gap-1">
+            <div>
+              <label>שם משתמש</label>
+              <input type="text" id="username-input" minlength="3" required />
+            </div>
+            <div>
+              <label>בחר אווטאר</label>
+              <div id="avatar-options" class="flex gap-1" style="flex-wrap:wrap;"></div>
+            </div>
+            <button type="submit" class="btn btn-primary mt-1">שמור שינויים</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="js/supabaseClient.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/profile.js"></script>
+</body>
+</html>

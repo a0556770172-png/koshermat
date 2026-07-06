@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>כושרמט — התחברות</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>♞</text></svg>">
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <div class="center-page page-enter">
+    <div class="card" style="width:100%; max-width:420px;">
+      <div class="text-center mt-1" style="margin-bottom:22px;">
+        <div style="font-size:44px;">♞</div>
+        <div class="brand-text" style="font-size:26px; font-weight:900;">כושרמט</div>
+        <div class="muted" style="font-size:14px;">שחמט. תחרות. קהילה.</div>
+      </div>
+
+      <div class="tabs" style="justify-content:center;">
+        <button class="tab-btn active" id="tab-login">התחברות</button>
+        <button class="tab-btn" id="tab-signup">הרשמה</button>
+      </div>
+
+      <form id="form-login" class="tab-panel active flex flex-col gap-1">
+        <div>
+          <label>אימייל</label>
+          <input type="email" id="login-email" required placeholder="you@example.com" />
+        </div>
+        <div>
+          <label>סיסמה</label>
+          <input type="password" id="login-password" required minlength="6" placeholder="••••••••" />
+        </div>
+        <button type="submit" class="btn btn-primary btn-block mt-1">התחבר</button>
+      </form>
+
+      <form id="form-signup" class="tab-panel flex flex-col gap-1">
+        <div>
+          <label>שם משתמש</label>
+          <input type="text" id="signup-username" required minlength="3" placeholder="אביר_הלילה" />
+        </div>
+        <div>
+          <label>אימייל</label>
+          <input type="email" id="signup-email" required placeholder="you@example.com" />
+        </div>
+        <div>
+          <label>סיסמה</label>
+          <input type="password" id="signup-password" required minlength="6" placeholder="••••••••" />
+        </div>
+        <button type="submit" class="btn btn-accent btn-block mt-1">צור חשבון</button>
+      </form>
+
+      <p class="muted text-center mt-2" style="font-size:12px;">
+        בהרשמה אתה מסכים לשחק בהגינות ולנהוג בכבוד כלפי שחקנים אחרים.
+      </p>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="js/supabaseClient.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/auth.js"></script>
+</body>
+</html>

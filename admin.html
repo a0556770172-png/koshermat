@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ניהול ופיקוח — כושרמט</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>♞</text></svg>">
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <nav class="navbar" id="navbar"></nav>
+
+  <div class="wrap page-enter">
+    <div class="section-title">🛡️ פאנל ניהול ופיקוח</div>
+
+    <div class="features-grid" style="grid-template-columns: repeat(3, 1fr); margin-bottom:24px;">
+      <div class="card text-center"><div class="muted">משתמשים רשומים</div><div style="font-size:30px; font-weight:900;" id="stat-users">-</div></div>
+      <div class="card text-center"><div class="muted">משחקים חיים</div><div style="font-size:30px; font-weight:900;" id="stat-games">-</div></div>
+      <div class="card text-center"><div class="muted">דיווחים פתוחים</div><div style="font-size:30px; font-weight:900;" id="stat-reports">-</div></div>
+    </div>
+
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="users">👥 משתמשים</button>
+      <button class="tab-btn" data-tab="reports">🚩 דיווחים</button>
+      <button class="tab-btn" data-tab="games">♟️ משחקים חיים</button>
+    </div>
+
+    <div class="tab-panel active" data-tab-panel="users">
+      <div class="card">
+        <input type="text" id="user-search" placeholder="חיפוש משתמש..." style="max-width:260px; margin-bottom:14px;" />
+        <div style="overflow-x:auto;">
+          <table class="lb">
+            <thead><tr><th>שחקן</th><th>דירוג</th><th>נ/ה/ת</th><th>סטטוס</th><th>הרשאה</th><th>פעולה</th></tr></thead>
+            <tbody id="users-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <div class="tab-panel" data-tab-panel="reports">
+      <div id="reports-list"></div>
+    </div>
+
+    <div class="tab-panel" data-tab-panel="games">
+      <div class="card">
+        <div id="admin-games-list"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script src="js/supabaseClient.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/admin.js"></script>
+</body>
+</html>
