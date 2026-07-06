@@ -166,7 +166,7 @@ async function requireAuth(redirectIfBanned = true) {
 // שומרים את מזהה המשחק בזיכרון הדפדפן (sessionStorage) ולא בכתובת עצמה.
 function goToGame(gameId) {
   sessionStorage.setItem("koshermat_game_id", gameId);
-  location.href = "game.html";
+  location.href = "board.html";
 }
 window.goToGame = goToGame;
 
