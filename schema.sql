@@ -334,6 +334,42 @@ create policy "admins can update reports" on reports
   for update using (exists (select 1 from profiles p where p.id = auth.uid() and p.is_admin));
 
 -- ============================================================
+-- הודעות פרטיות בין משתמשים (הוחלף הצ'אט הקהילתי הכללי בזה)
+-- ============================================================
+create table if not exists direct_messages (
+  id uuid primary key default uuid_generate_v4(),
+  sender_id uuid references profiles(id) on delete cascade,
+  recipient_id uuid references profiles(id) on delete cascade,
+  message text not null,
+  created_at timestamptz not null default now(),
+  read_at timestamptz
+);
+
+alter table direct_messages enable row level security;
+
+drop policy if exists "participants can view their messages" on direct_messages;
+create policy "participants can view their messages" on direct_messages
+  for select using (auth.uid() = sender_id or auth.uid() = recipient_id);
+
+drop policy if exists "users can send private messages" on direct_messages;
+create policy "users can send private messages" on direct_messages
+  for insert with check (
+    auth.uid() = sender_id
+    and sender_id <> recipient_id
+    and not exists (select 1 from profiles p where p.id = auth.uid() and p.is_banned)
+  );
+
+drop policy if exists "recipient can mark messages read" on direct_messages;
+create policy "recipient can mark messages read" on direct_messages
+  for update using (auth.uid() = recipient_id);
+
+do $$
+begin
+  execute 'alter publication supabase_realtime add table direct_messages';
+exception when duplicate_object then null;
+end $$;
+
+-- ============================================================
 -- ערעורים על חסימה
 -- ============================================================
 create table if not exists ban_appeals (

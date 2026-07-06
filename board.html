@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 <title>משחק — כושרמט</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>♞</text></svg>">
-<link rel="stylesheet" href="css/style.css?v=15" />
+<link rel="stylesheet" href="css/style.css?v=16" />
 </head>
 <body>
   <nav class="navbar" id="navbar"></nav>
@@ -2028,6 +2028,13 @@ function goToGame(gameId) {
 }
 window.goToGame = goToGame;
 
+function openDM(userId, username) {
+  sessionStorage.setItem("koshermat_dm_user_id", userId);
+  sessionStorage.setItem("koshermat_dm_username", username || "");
+  location.href = "messages.html";
+}
+window.openDM = openDM;
+
 // ---------------- אתגר משחק אישי (הזמנות) ----------------
 async function sendGameInvite(myId, targetId, targetName) {
   if (myId === targetId) {
@@ -2185,6 +2192,7 @@ function renderNav(activePage, profile) {
     <div class="nav-links">
       <a href="lobby.html" class="${activePage === "lobby" ? "active" : ""}">לובי</a>
       <a href="leaderboard.html" class="${activePage === "leaderboard" ? "active" : ""}">דירוג</a>
+      <a href="messages.html" class="${activePage === "messages" ? "active" : ""}">📨 הודעות</a>
       <a href="profile.html" class="${activePage === "profile" ? "active" : ""}">הפרופיל שלי</a>
       ${adminLink}
     </div>

@@ -1,5 +1,5 @@
 // ==========================================================
-// לוגיקת הלובי: פרופיל, שידוך יריבים, משחקים חיים, צ'אט גלובלי
+// לוגיקת הלובי: פרופיל, שידוך יריבים, משחקים חיים, תצוגת הודעות פרטיות
 // ==========================================================
 
 let ME = null;
@@ -17,24 +17,10 @@ let queueChannel = null;
   await checkExistingQueue();
   await loadLiveGames();
   subscribeLiveGames();
-  await loadGlobalChat();
-  subscribeGlobalChat();
+  await loadDmPreview();
+  subscribeDmPreview();
 
   document.getElementById("find-btn").addEventListener("click", toggleSearch);
-
-  document.getElementById("chat-form").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const input = document.getElementById("chat-input");
-    const msg = input.value.trim();
-    if (!msg) return;
-    input.value = "";
-    const { error } = await sb.from("chat_messages").insert({
-      game_id: null,
-      sender_id: ME.id,
-      message: msg,
-    });
-    if (error) toast("שגיאה בשליחת הודעה", "error");
-  });
 })();
 
 function renderProfileCard(p) {
@@ -205,58 +191,54 @@ function subscribeLiveGames() {
   setInterval(loadLiveGames, 5000);
 }
 
-// ---------------- Global chat ----------------
-const seenChatIds = new Set();
-
-async function loadGlobalChat() {
+// ---------------- תצוגה מקדימה של הודעות פרטיות ----------------
+async function loadDmPreview() {
   const { data } = await sb
-    .from("chat_messages")
-    .select("id, message, created_at, sender_id, sender:sender_id(username)")
-    .is("game_id", null)
+    .from("direct_messages")
+    .select("id, message, created_at, sender_id, recipient_id, read_at, sender:sender_id(username, avatar_emoji), recipient:recipient_id(username, avatar_emoji)")
+    .or(`sender_id.eq.${ME.id},recipient_id.eq.${ME.id}`)
     .order("created_at", { ascending: false })
-    .limit(40);
-  const box = document.getElementById("chat-messages");
-  box.innerHTML = "";
-  seenChatIds.clear();
-  (data || [])
-    .reverse()
-    .forEach((m) => appendChatMessage(m));
-  box.scrollTop = box.scrollHeight;
+    .limit(50);
+  renderDmPreview(data || []);
 }
 
-function appendChatMessage(m) {
-  if (seenChatIds.has(m.id)) return;
-  seenChatIds.add(m.id);
-  const box = document.getElementById("chat-messages");
-  const mine = m.sender_id === ME.id;
-  const div = document.createElement("div");
-  div.className = "chat-msg" + (mine ? " me" : "");
-  div.innerHTML = `<span class="sender">${escapeHtml(m.sender?.username || "משתמש")}</span>${escapeHtml(m.message)}`;
-  box.appendChild(div);
-  box.scrollTop = box.scrollHeight;
-}
+function renderDmPreview(messages) {
+  const seen = new Set();
+  const conversations = [];
+  for (const m of messages) {
+    const otherId = m.sender_id === ME.id ? m.recipient_id : m.sender_id;
+    if (seen.has(otherId)) continue;
+    seen.add(otherId);
+    const other = m.sender_id === ME.id ? m.recipient : m.sender;
+    const unread = m.recipient_id === ME.id && !m.read_at;
+    conversations.push({ otherId, other, message: m.message, unread });
+  }
 
-function subscribeGlobalChat() {
-  sb.channel("global-chat")
-    .on(
-      "postgres_changes",
-      { event: "INSERT", schema: "public", table: "chat_messages" },
-      async (payload) => {
-        if (payload.new.game_id !== null) return; // רק צ'אט גלובלי
-        const { data: sender } = await sb.from("profiles").select("username").eq("id", payload.new.sender_id).single();
-        appendChatMessage({ ...payload.new, sender });
-      }
+  const list = document.getElementById("dm-preview-list");
+  if (!conversations.length) {
+    list.innerHTML = `<p class="muted text-center" style="font-size:13px;">אין עדיין הודעות. אפשר לשלוח הודעה פרטית מהפרופיל של שחקן אחר או מטבלת הדירוג.</p>`;
+    return;
+  }
+  list.innerHTML = conversations
+    .slice(0, 6)
+    .map(
+      (c) => `
+      <div class="game-list-item" onclick="openDM('${c.otherId}', '${escapeHtml(c.other?.username || "שחקן")}')">
+        <span>${c.other?.avatar_emoji || "♟️"} <b>${escapeHtml(c.other?.username || "שחקן")}</b>${c.unread ? ` <span class="badge open">חדש</span>` : ""}</span>
+        <span class="muted" style="font-size:12px; max-width:150px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(c.message)}</span>
+      </div>`
     )
+    .join("");
+}
+
+function subscribeDmPreview() {
+  sb.channel("dm-preview-" + ME.id)
+    .on("postgres_changes", { event: "*", schema: "public", table: "direct_messages" }, (payload) => {
+      const row = payload.new || payload.old;
+      if (row && (row.sender_id === ME.id || row.recipient_id === ME.id)) loadDmPreview();
+    })
     .subscribe();
 
-  // גיבוי: משיכת הודעות חדשות כל 3 שניות למקרה שההתראה בזמן-אמת לא הגיעה
-  setInterval(async () => {
-    const { data } = await sb
-      .from("chat_messages")
-      .select("id, message, created_at, sender_id, sender:sender_id(username)")
-      .is("game_id", null)
-      .order("created_at", { ascending: false })
-      .limit(40);
-    (data || []).reverse().forEach((m) => appendChatMessage(m));
-  }, 3000);
+  // גיבוי: רענון יזום כל 5 שניות למקרה שההתראה בזמן-אמת לא הגיעה
+  setInterval(loadDmPreview, 5000);
 }

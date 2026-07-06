@@ -36,7 +36,10 @@ function renderProfile() {
   const isMe = VIEWED.id === ME.id;
   const challengeBtn =
     !isMe && !VIEWED.is_banned
-      ? `<button class="btn btn-primary mt-2 btn-block" onclick="sendGameInvite('${ME.id}','${VIEWED.id}','${escapeHtml(VIEWED.username)}')">⚔️ אתגר למשחק</button>`
+      ? `<div class="flex gap-1 mt-2">
+          <button class="btn btn-primary btn-block" onclick="sendGameInvite('${ME.id}','${VIEWED.id}','${escapeHtml(VIEWED.username)}')">⚔️ אתגר למשחק</button>
+          <button class="btn btn-accent btn-block" onclick="openDM('${VIEWED.id}','${escapeHtml(VIEWED.username)}')">💬 הודעה פרטית</button>
+        </div>`
       : "";
 
   document.getElementById("profile-header").innerHTML = `

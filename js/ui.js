@@ -170,6 +170,14 @@ function goToGame(gameId) {
 }
 window.goToGame = goToGame;
 
+// ---------------- ניווט להודעה פרטית עם משתמש (בלי מזהה בכתובת) ----------------
+function openDM(userId, username) {
+  sessionStorage.setItem("koshermat_dm_user_id", userId);
+  sessionStorage.setItem("koshermat_dm_username", username || "");
+  location.href = "messages.html";
+}
+window.openDM = openDM;
+
 // ---------------- אתגר משחק אישי (הזמנות) ----------------
 async function sendGameInvite(myId, targetId, targetName) {
   if (myId === targetId) {
@@ -328,6 +336,7 @@ function renderNav(activePage, profile) {
     <div class="nav-links">
       <a href="lobby.html" class="${activePage === "lobby" ? "active" : ""}">לובי</a>
       <a href="leaderboard.html" class="${activePage === "leaderboard" ? "active" : ""}">דירוג</a>
+      <a href="messages.html" class="${activePage === "messages" ? "active" : ""}">📨 הודעות</a>
       <a href="profile.html" class="${activePage === "profile" ? "active" : ""}">הפרופיל שלי</a>
       ${adminLink}
     </div>

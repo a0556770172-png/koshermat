@@ -47,7 +47,8 @@ function renderTable(filter) {
       const isMe = p.id === ME.id;
       const inviteBtn = isMe
         ? ""
-        : `<button class="btn btn-ghost" style="padding:6px 12px; font-size:12px;" onclick="sendGameInvite('${ME.id}','${p.id}','${escapeHtml(p.username)}')">⚔️ אתגר</button>`;
+        : `<button class="btn btn-ghost" style="padding:6px 12px; font-size:12px;" onclick="sendGameInvite('${ME.id}','${p.id}','${escapeHtml(p.username)}')">⚔️ אתגר</button>
+           <button class="btn btn-ghost" style="padding:6px 12px; font-size:12px;" onclick="openDM('${p.id}','${escapeHtml(p.username)}')">💬</button>`;
       return `
       <tr style="${isMe ? "background:rgba(124,92,255,.15);" : ""}">
         <td>${medalIcon}</td>
