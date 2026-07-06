@@ -18,8 +18,8 @@ let gameEnded = false;
 let timerInterval = null;
 let pendingPromotion = null;
 
-const params = new URLSearchParams(location.search);
-const GAME_ID = params.get("id");
+// תמיכה גם בקישור ישן (?id=) וגם בקישור החדש (#id) - בלי המילה "id=" בכתובת
+const GAME_ID = decodeURIComponent(location.hash.slice(1)) || new URLSearchParams(location.search).get("id");
 
 (async function init() {
   const auth = await requireAuth();

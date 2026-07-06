@@ -92,7 +92,7 @@ async function loadHistory() {
       else if (g.winner_id === VIEWED.id) { resultLabel = "ניצחון"; resultColor = "var(--success)"; }
       else { resultLabel = "הפסד"; resultColor = "var(--danger)"; }
       return `
-        <div class="game-list-item" onclick="location.href='game.html?id=${g.id}'">
+        <div class="game-list-item" onclick="location.href='game.html#${g.id}'">
           <span>נגד ${escapeHtml(opponent || "?")} · ${timeAgo(g.created_at)}</span>
           <span style="color:${resultColor}; font-weight:700;">${resultLabel}</span>
         </div>`;

@@ -256,7 +256,7 @@ async function showInviteBanner(inv) {
       return;
     }
     toast("האתגר התקבל! מעביר אותך למשחק...", "success");
-    setTimeout(() => (location.href = "game.html?id=" + data), 500);
+    setTimeout(() => (location.href = "game.html#" + data), 500);
   });
 
   document.getElementById(`decline-inv-${inv.id}`).addEventListener("click", async () => {
