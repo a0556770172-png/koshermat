@@ -45,6 +45,9 @@ function renderTable(filter) {
       const medalIcon = idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : `#${idx + 1}`;
       const r = getRank(p.rating);
       const isMe = p.id === ME.id;
+      const inviteBtn = isMe
+        ? ""
+        : `<button class="btn btn-ghost" style="padding:6px 12px; font-size:12px;" onclick="sendGameInvite('${ME.id}','${p.id}','${escapeHtml(p.username)}')">⚔️ אתגר</button>`;
       return `
       <tr style="${isMe ? "background:rgba(124,92,255,.15);" : ""}">
         <td>${medalIcon}</td>
@@ -55,6 +58,7 @@ function renderTable(filter) {
         <td><b>${p.rating}</b></td>
         <td>${p.points}</td>
         <td>${p.wins}/${p.losses}/${p.draws}</td>
+        <td>${inviteBtn}</td>
       </tr>`;
     })
     .join("");

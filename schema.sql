@@ -2,6 +2,7 @@
 -- כושרמט - סכמת מסד נתונים מלאה עבור Supabase
 -- הרץ קובץ זה פעם אחת ב-SQL Editor של הפרויקט שלך ב-Supabase
 -- (Dashboard -> SQL Editor -> New query -> הדבק והרץ)
+-- קובץ זה בטוח להרצה חוזרת (idempotent)
 -- ============================================================
 
 create extension if not exists "uuid-ossp";
@@ -29,10 +30,12 @@ create table if not exists profiles (
 
 alter table profiles enable row level security;
 
+drop policy if exists "profiles are viewable by everyone" on profiles;
 create policy "profiles are viewable by everyone"
   on profiles for select
   using (true);
 
+drop policy if exists "users can update their own profile" on profiles;
 create policy "users can update their own profile"
   on profiles for update
   using (auth.uid() = id);
@@ -123,9 +126,11 @@ create table if not exists user_medals (
 );
 
 alter table medals enable row level security;
+drop policy if exists "medals viewable by everyone" on medals;
 create policy "medals viewable by everyone" on medals for select using (true);
 
 alter table user_medals enable row level security;
+drop policy if exists "user medals viewable by everyone" on user_medals;
 create policy "user medals viewable by everyone" on user_medals for select using (true);
 
 -- ============================================================
@@ -150,11 +155,14 @@ create table if not exists games (
 
 alter table games enable row level security;
 
+drop policy if exists "games viewable by everyone" on games;
 create policy "games viewable by everyone" on games for select using (true);
 
+drop policy if exists "participants can update their game" on games;
 create policy "participants can update their game" on games for update
   using (auth.uid() = white_id or auth.uid() = black_id);
 
+drop policy if exists "admins can update any game" on games;
 create policy "admins can update any game" on games for update
   using (exists (select 1 from profiles p where p.id = auth.uid() and p.is_admin));
 
@@ -180,9 +188,11 @@ create table if not exists matchmaking_queue (
 
 alter table matchmaking_queue enable row level security;
 
+drop policy if exists "users manage their own queue row" on matchmaking_queue;
 create policy "users manage their own queue row" on matchmaking_queue
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
+drop policy if exists "queue viewable by owner" on matchmaking_queue;
 create policy "queue viewable by owner" on matchmaking_queue
   for select using (auth.uid() = user_id);
 
@@ -233,8 +243,10 @@ create table if not exists chat_messages (
 
 alter table chat_messages enable row level security;
 
+drop policy if exists "chat viewable by everyone" on chat_messages;
 create policy "chat viewable by everyone" on chat_messages for select using (true);
 
+drop policy if exists "authenticated non-banned users can send chat" on chat_messages;
 create policy "authenticated non-banned users can send chat" on chat_messages
   for insert with check (
     auth.uid() = sender_id
@@ -258,15 +270,19 @@ create table if not exists reports (
 
 alter table reports enable row level security;
 
+drop policy if exists "users can create reports" on reports;
 create policy "users can create reports" on reports
   for insert with check (auth.uid() = reporter_id);
 
+drop policy if exists "reporters can view their own reports" on reports;
 create policy "reporters can view their own reports" on reports
   for select using (auth.uid() = reporter_id);
 
+drop policy if exists "admins can view all reports" on reports;
 create policy "admins can view all reports" on reports
   for select using (exists (select 1 from profiles p where p.id = auth.uid() and p.is_admin));
 
+drop policy if exists "admins can update reports" on reports;
 create policy "admins can update reports" on reports
   for update using (exists (select 1 from profiles p where p.id = auth.uid() and p.is_admin));
 
@@ -457,4 +473,99 @@ begin
 end;
 $$;
 
--- =======================
+-- ============================================================
+-- אתגר משחק אישי (הזמנת שחקן ספציפי למשחק)
+-- ============================================================
+create table if not exists game_invites (
+  id uuid primary key default uuid_generate_v4(),
+  from_user uuid references profiles(id) on delete cascade,
+  to_user uuid references profiles(id) on delete cascade,
+  status text not null default 'pending', -- pending | accepted | declined | cancelled
+  game_id uuid references games(id),
+  created_at timestamptz not null default now()
+);
+
+alter table game_invites enable row level security;
+
+drop policy if exists "invite visible to participants" on game_invites;
+create policy "invite visible to participants" on game_invites for select
+  using (auth.uid() = from_user or auth.uid() = to_user);
+
+drop policy if exists "users can send invites" on game_invites;
+create policy "users can send invites" on game_invites for insert
+  with check (auth.uid() = from_user and from_user <> to_user);
+
+drop policy if exists "participants can update invite" on game_invites;
+create policy "participants can update invite" on game_invites for update
+  using (auth.uid() = from_user or auth.uid() = to_user);
+
+create or replace function accept_game_invite(p_invite_id uuid)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  inv game_invites%rowtype;
+  new_game_id uuid;
+  is_white boolean;
+begin
+  select * into inv from game_invites where id = p_invite_id for update;
+  if not found then
+    raise exception 'invite not found';
+  end if;
+  if inv.to_user <> auth.uid() then
+    raise exception 'not authorized';
+  end if;
+  if inv.status <> 'pending' then
+    raise exception 'invite already resolved';
+  end if;
+
+  is_white := random() < 0.5;
+  insert into games (white_id, black_id)
+  values (
+    case when is_white then inv.from_user else inv.to_user end,
+    case when is_white then inv.to_user else inv.from_user end
+  ) returning id into new_game_id;
+
+  update game_invites set status = 'accepted', game_id = new_game_id where id = p_invite_id;
+
+  delete from matchmaking_queue where user_id in (inv.from_user, inv.to_user);
+
+  return new_game_id;
+end;
+$$;
+
+-- ============================================================
+-- Realtime: ודא שהטבלאות משודרות בזמן אמת (בטוח להרצה חוזרת)
+-- ============================================================
+do $$
+begin
+  execute 'alter publication supabase_realtime add table games';
+exception when duplicate_object then null;
+end $$;
+
+do $$
+begin
+  execute 'alter publication supabase_realtime add table chat_messages';
+exception when duplicate_object then null;
+end $$;
+
+do $$
+begin
+  execute 'alter publication supabase_realtime add table matchmaking_queue';
+exception when duplicate_object then null;
+end $$;
+
+do $$
+begin
+  execute 'alter publication supabase_realtime add table game_invites';
+exception when duplicate_object then null;
+end $$;
+
+-- ============================================================
+-- סיום. קובץ זה בטוח להרצה חוזרת (idempotent) - אפשר להריץ שוב בעתיד
+-- בלי חשש משגיאות "already exists".
+-- כדי להפוך משתמש למנהל, הרץ (עם ה-UUID של המשתמש מטבלת auth.users):
+-- update profiles set is_admin = true where id = 'UUID-של-המשתמש';
+-- ============================================================

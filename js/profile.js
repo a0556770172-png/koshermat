@@ -34,11 +34,17 @@ const AVATAR_OPTIONS = ["♟️", "♞", "♝", "♜", "♛", "♚", "🦁", "�
 
 function renderProfile() {
   const isMe = VIEWED.id === ME.id;
+  const challengeBtn =
+    !isMe && !VIEWED.is_banned
+      ? `<button class="btn btn-primary mt-2 btn-block" onclick="sendGameInvite('${ME.id}','${VIEWED.id}','${escapeHtml(VIEWED.username)}')">⚔️ אתגר למשחק</button>`
+      : "";
+
   document.getElementById("profile-header").innerHTML = `
     <div style="font-size:64px;">${VIEWED.avatar_emoji}</div>
     <div style="font-size:24px; font-weight:900; margin-top:8px;">${escapeHtml(VIEWED.username)} ${isMe ? "(אתה)" : ""}</div>
     <div class="mt-1">${rankBadgeHtml(VIEWED.rating)}</div>
     ${VIEWED.is_banned ? `<div class="badge banned mt-1">חשבון מושעה</div>` : ""}
+    ${challengeBtn}
   `;
   document.getElementById("stats-box").innerHTML = `
     <div class="stat-row"><span>נקודות</span><b>${VIEWED.points}</b></div>

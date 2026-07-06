@@ -145,7 +145,114 @@ async function requireAuth(redirectIfBanned = true) {
     window.location.href = "auth.html";
     return null;
   }
+
+  listenForGameInvites(profile.id);
+
   return { session, profile };
+}
+
+// ---------------- אתגר משחק אישי (הזמנות) ----------------
+async function sendGameInvite(myId, targetId, targetName) {
+  if (myId === targetId) {
+    toast("אי אפשר לאתגר את עצמך", "error");
+    return;
+  }
+  const { data: existingInvite } = await sb
+    .from("game_invites")
+    .select("id")
+    .eq("from_user", myId)
+    .eq("to_user", targetId)
+    .eq("status", "pending")
+    .maybeSingle();
+
+  if (existingInvite) {
+    toast(`כבר שלחת הזמנה ל${targetName}, ממתין לתגובה`, "error");
+    return;
+  }
+
+  const { error } = await sb.from("game_invites").insert({ from_user: myId, to_user: targetId });
+  if (error) {
+    toast("שגיאה בשליחת האתגר: " + error.message, "error");
+    return;
+  }
+  toast(`אתגר נשלח ל${targetName}! ⚔️`, "success");
+}
+
+function listenForGameInvites(myId) {
+  loadPendingInvitesForMe(myId);
+  sb.channel("invites-" + myId)
+    .on(
+      "postgres_changes",
+      { event: "INSERT", schema: "public", table: "game_invites" },
+      (payload) => {
+        if (payload.new.to_user === myId && payload.new.status === "pending") {
+          showInviteBanner(payload.new);
+        }
+      }
+    )
+    .subscribe();
+}
+
+async function loadPendingInvitesForMe(myId) {
+  const { data } = await sb
+    .from("game_invites")
+    .select("*, from:from_user(username, avatar_emoji)")
+    .eq("to_user", myId)
+    .eq("status", "pending");
+  (data || []).forEach((inv) => showInviteBanner(inv));
+}
+
+async function showInviteBanner(inv) {
+  if (document.getElementById("invite-" + inv.id)) return;
+
+  let fromName = inv.from?.username;
+  let fromAvatar = inv.from?.avatar_emoji;
+  if (!fromName) {
+    const { data } = await sb.from("profiles").select("username, avatar_emoji").eq("id", inv.from_user).single();
+    fromName = data?.username || "שחקן";
+    fromAvatar = data?.avatar_emoji || "♟️";
+  }
+
+  let container = document.getElementById("invite-banner-container");
+  if (!container) {
+    container = document.createElement("div");
+    container.id = "invite-banner-container";
+    container.style.cssText =
+      "position:fixed; top:80px; left:50%; transform:translateX(-50%); z-index:600; display:flex; flex-direction:column; gap:10px; width:min(340px,90vw);";
+    document.body.appendChild(container);
+  }
+
+  const el = document.createElement("div");
+  el.id = "invite-" + inv.id;
+  el.className = "card";
+  el.style.cssText = "animation: popIn .4s cubic-bezier(.2,1.4,.5,1) both;";
+  el.innerHTML = `
+    <div class="flex gap-1" style="align-items:center;">
+      <span style="font-size:28px;">${fromAvatar || "♟️"}</span>
+      <div><b>${escapeHtml(fromName)}</b> אתגר/ה אותך למשחק! ⚔️</div>
+    </div>
+    <div class="flex gap-1 mt-2">
+      <button class="btn btn-accent" style="flex:1;" id="accept-inv-${inv.id}">✔️ קבל</button>
+      <button class="btn btn-ghost" style="flex:1;" id="decline-inv-${inv.id}">✖️ דחה</button>
+    </div>
+  `;
+  container.appendChild(el);
+
+  document.getElementById(`accept-inv-${inv.id}`).addEventListener("click", async () => {
+    el.remove();
+    const { data, error } = await sb.rpc("accept_game_invite", { p_invite_id: inv.id });
+    if (error) {
+      toast("שגיאה: " + error.message, "error");
+      return;
+    }
+    toast("האתגר התקבל! מעביר אותך למשחק...", "success");
+    setTimeout(() => (location.href = "game.html?id=" + data), 500);
+  });
+
+  document.getElementById(`decline-inv-${inv.id}`).addEventListener("click", async () => {
+    el.remove();
+    await sb.from("game_invites").update({ status: "declined" }).eq("id", inv.id);
+  });
 }
 
 function renderNav(activePage, profile) {
