@@ -40,24 +40,32 @@ formSignup.addEventListener("submit", async (e) => {
   btn.disabled = true;
   btn.innerHTML = `<span class="spinner"></span> נרשם...`;
 
-  const { data, error } = await sb.auth.signUp({
-    email,
-    password,
-    options: { data: { username } },
-  });
+  // עוטפים ב-try/catch כדי שהכפתור לעולם לא יישאר תקוע אם הבקשה נכשלת
+  // באופן לא צפוי (כולל timeout של הרשת שהוגדר ב-supabaseClient.js)
+  try {
+    const { data, error } = await sb.auth.signUp({
+      email,
+      password,
+      options: { data: { username } },
+    });
 
-  if (error) {
-    toast("שגיאה בהרשמה: " + error.message, "error");
-    btn.disabled = false;
-    btn.textContent = "צור חשבון";
-    return;
-  }
+    if (error) {
+      toast("שגיאה בהרשמה: " + error.message, "error");
+      btn.disabled = false;
+      btn.textContent = "צור חשבון";
+      return;
+    }
 
-  if (data.session) {
-    toast("נרשמת בהצלחה! מעביר אותך ללובי...", "success");
-    setTimeout(() => (window.location.href = "lobby.html"), 900);
-  } else {
-    toast("נרשמת! אם נדרש אימות מייל, בדוק את תיבת הדואר שלך.", "success");
+    if (data.session) {
+      toast("נרשמת בהצלחה! מעביר אותך ללובי...", "success");
+      setTimeout(() => (window.location.href = "lobby.html"), 900);
+    } else {
+      toast("נרשמת! אם נדרש אימות מייל, בדוק את תיבת הדואר שלך.", "success");
+      btn.disabled = false;
+      btn.textContent = "צור חשבון";
+    }
+  } catch (err) {
+    toast("אין תגובה מהשרת - בדוק את החיבור לאינטרנט ונסה שוב: " + (err && err.message ? err.message : String(err)), "error");
     btn.disabled = false;
     btn.textContent = "צור חשבון";
   }
@@ -72,17 +80,23 @@ formLogin.addEventListener("submit", async (e) => {
   btn.disabled = true;
   btn.innerHTML = `<span class="spinner"></span> מתחבר...`;
 
-  const { error } = await sb.auth.signInWithPassword({ email, password });
+  try {
+    const { error } = await sb.auth.signInWithPassword({ email, password });
 
-  if (error) {
-    toast("שגיאה בהתחברות: " + error.message, "error");
+    if (error) {
+      toast("שגיאה בהתחברות: " + error.message, "error");
+      btn.disabled = false;
+      btn.textContent = "התחבר";
+      return;
+    }
+
+    toast("התחברת בהצלחה!", "success");
+    setTimeout(() => (window.location.href = "lobby.html"), 500);
+  } catch (err) {
+    toast("אין תגובה מהשרת - בדוק את החיבור לאינטרנט ונסה שוב: " + (err && err.message ? err.message : String(err)), "error");
     btn.disabled = false;
     btn.textContent = "התחבר";
-    return;
   }
-
-  toast("התחברת בהצלחה!", "success");
-  setTimeout(() => (window.location.href = "lobby.html"), 500);
 });
 
 document.getElementById("forgot-password-link").addEventListener("click", async () => {
@@ -91,12 +105,16 @@ document.getElementById("forgot-password-link").addEventListener("click", async 
     toast("קודם תכתוב את כתובת האימייל שלך בשדה למעלה", "error");
     return;
   }
-  const { error } = await sb.auth.resetPasswordForEmail(email, {
-    redirectTo: window.location.origin + window.location.pathname.replace(/auth\.html$/, "reset-password.html"),
-  });
-  if (error) {
-    toast("שגיאה: " + error.message, "error");
-    return;
+  try {
+    const { error } = await sb.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.origin + window.location.pathname.replace(/auth\.html$/, "reset-password.html"),
+    });
+    if (error) {
+      toast("שגיאה: " + error.message, "error");
+      return;
+    }
+    toast("נשלח מייל לאיפוס סיסמה - בדוק את תיבת הדואר שלך", "success");
+  } catch (err) {
+    toast("אין תגובה מהשרת - בדוק את החיבור לאינטרנט ונסה שוב", "error");
   }
-  toast("נשלח מייל לאיפוס סיסמה - בדוק את תיבת הדואר שלך", "success");
 });
