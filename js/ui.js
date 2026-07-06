@@ -124,7 +124,31 @@ function spawnFloatingPieces(container, count = 14) {
 
 // ---------------- Auth guard + nav ----------------
 async function requireAuth(redirectIfBanned = true) {
-  const { data: { session } } = await sb.auth.getSession();
+  let { data: { session } } = await sb.auth.getSession();
+
+  // בטעינה ישירה של דף (למשל קישור למשחק) לפעמים ה-session עדיין
+  // נטען מהאחסון המקומי ברגע הבדיקה הראשונה - נותנים רגע נוסף לפני שנועלים.
+  if (!session) {
+    session = await new Promise((resolve) => {
+      let done = false;
+      const { data: sub } = sb.auth.onAuthStateChange((event, s) => {
+        if (done) return;
+        if (event === "INITIAL_SESSION" || s) {
+          done = true;
+          sub.subscription.unsubscribe();
+          resolve(s);
+        }
+      });
+      setTimeout(() => {
+        if (!done) {
+          done = true;
+          sub.subscription.unsubscribe();
+          resolve(null);
+        }
+      }, 2000);
+    });
+  }
+
   if (!session) {
     window.location.href = "auth.html";
     return null;
