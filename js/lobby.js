@@ -122,22 +122,48 @@ function stopSearchingUI() {
   }
 }
 
+let matchFound = false;
+let matchPollInterval = null;
+
 function watchForMatch() {
-  if (queueChannel) return;
-  queueChannel = sb
-    .channel("queue-watch-" + ME.id)
-    .on(
-      "postgres_changes",
-      { event: "INSERT", schema: "public", table: "games" },
-      (payload) => {
-        const g = payload.new;
-        if (g.white_id === ME.id || g.black_id === ME.id) {
-          toast("נמצא יריב! מעביר אותך למשחק...", "success");
-          setTimeout(() => goToGame(g.id), 700);
+  matchFound = false;
+  if (!queueChannel) {
+    queueChannel = sb
+      .channel("queue-watch-" + ME.id)
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "games" },
+        (payload) => {
+          const g = payload.new;
+          if (g.white_id === ME.id || g.black_id === ME.id) {
+            onMatchFound(g.id);
+          }
         }
-      }
-    )
-    .subscribe();
+      )
+      .subscribe();
+  }
+
+  // גיבוי: בדיקה יזומה כל 2 שניות למקרה שההתראה בזמן-אמת לא הגיעה
+  if (!matchPollInterval) {
+    matchPollInterval = setInterval(async () => {
+      if (matchFound || !searching) return;
+      const { data } = await sb
+        .from("games")
+        .select("id, created_at")
+        .or(`white_id.eq.${ME.id},black_id.eq.${ME.id}`)
+        .eq("status", "active")
+        .order("created_at", { ascending: false })
+        .limit(1);
+      if (data && data.length) onMatchFound(data[0].id);
+    }, 2000);
+  }
+}
+
+function onMatchFound(gameId) {
+  if (matchFound) return;
+  matchFound = true;
+  toast("נמצא יריב! מעביר אותך למשחק...", "success");
+  setTimeout(() => goToGame(gameId), 700);
 }
 
 // ---------------- Live games ----------------
@@ -174,9 +200,14 @@ function subscribeLiveGames() {
       loadLiveGames();
     })
     .subscribe();
+
+  // גיבוי: רענון יזום כל 5 שניות למקרה שההתראה בזמן-אמת לא הגיעה
+  setInterval(loadLiveGames, 5000);
 }
 
 // ---------------- Global chat ----------------
+const seenChatIds = new Set();
+
 async function loadGlobalChat() {
   const { data } = await sb
     .from("chat_messages")
@@ -186,6 +217,7 @@ async function loadGlobalChat() {
     .limit(40);
   const box = document.getElementById("chat-messages");
   box.innerHTML = "";
+  seenChatIds.clear();
   (data || [])
     .reverse()
     .forEach((m) => appendChatMessage(m));
@@ -193,6 +225,8 @@ async function loadGlobalChat() {
 }
 
 function appendChatMessage(m) {
+  if (seenChatIds.has(m.id)) return;
+  seenChatIds.add(m.id);
   const box = document.getElementById("chat-messages");
   const mine = m.sender_id === ME.id;
   const div = document.createElement("div");
@@ -214,4 +248,15 @@ function subscribeGlobalChat() {
       }
     )
     .subscribe();
+
+  // גיבוי: משיכת הודעות חדשות כל 3 שניות למקרה שההתראה בזמן-אמת לא הגיעה
+  setInterval(async () => {
+    const { data } = await sb
+      .from("chat_messages")
+      .select("id, message, created_at, sender_id, sender:sender_id(username)")
+      .is("game_id", null)
+      .order("created_at", { ascending: false })
+      .limit(40);
+    (data || []).reverse().forEach((m) => appendChatMessage(m));
+  }, 3000);
 }

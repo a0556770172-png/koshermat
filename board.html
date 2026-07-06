@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>משחק — כושרמט</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>♞</text></svg>">
-<link rel="stylesheet" href="css/style.css?v=6" />
+<link rel="stylesheet" href="css/style.css?v=7" />
 </head>
 <body>
   <nav class="navbar" id="navbar"></nav>
@@ -2048,6 +2048,8 @@ async function sendGameInvite(myId, targetId, targetName) {
   toast(`אתגר נשלח ל${targetName}! ⚔️`, "success");
 }
 
+const handledInviteUpdates = new Set();
+
 function listenForGameInvites(myId) {
   loadPendingInvitesForMe(myId);
   sb.channel("invites-" + myId)
@@ -2063,15 +2065,35 @@ function listenForGameInvites(myId) {
     .on(
       "postgres_changes",
       { event: "UPDATE", schema: "public", table: "game_invites" },
-      (payload) => {
-        // מי ששלח את האתגר צריך גם הוא לעבור למשחק ברגע שהצד השני קיבל אותו
-        if (payload.new.from_user === myId && payload.new.status === "accepted" && payload.new.game_id) {
-          toast("האתגר התקבל! מעביר אותך למשחק...", "success");
-          setTimeout(() => goToGame(payload.new.game_id), 400);
-        }
-      }
+      (payload) => handleAcceptedInvite(myId, payload.new)
     )
     .subscribe();
+
+  // גיבוי: בדיקה יזומה כל 3 שניות למקרה שההתראה בזמן-אמת לא הגיעה
+  setInterval(async () => {
+    const { data: incoming } = await sb
+      .from("game_invites")
+      .select("*, from:from_user(username, avatar_emoji)")
+      .eq("to_user", myId)
+      .eq("status", "pending");
+    (incoming || []).forEach((inv) => showInviteBanner(inv));
+
+    const { data: sent } = await sb
+      .from("game_invites")
+      .select("*")
+      .eq("from_user", myId)
+      .eq("status", "accepted");
+    (sent || []).forEach((inv) => handleAcceptedInvite(myId, inv));
+  }, 3000);
+}
+
+function handleAcceptedInvite(myId, invite) {
+  if (invite.from_user === myId && invite.status === "accepted" && invite.game_id) {
+    if (handledInviteUpdates.has(invite.id)) return;
+    handledInviteUpdates.add(invite.id);
+    toast("האתגר התקבל! מעביר אותך למשחק...", "success");
+    setTimeout(() => goToGame(invite.game_id), 400);
+  }
 }
 
 async function loadPendingInvitesForMe(myId) {
@@ -2436,37 +2458,58 @@ async function finishGame(status, winnerId) {
 }
 
 // ---------------- Realtime sync ----------------
+// חלק מהתקשורת בזמן-אמת (WebSocket) עלולה לא לעבוד ברשתות עם סינון תוכן,
+// גם אם שאר האתר עובד תקין. לכן, בנוסף להאזנה בזמן-אמת, יש גם בדיקה
+// יזומה (polling) כל כמה שניות שמושכת את מצב המשחק ישירות - כדי שהמהלכים
+// של היריב יגיעו גם אם ה-WebSocket חסום.
+let lastKnownUpdatedAt = null;
+
+function applyGameUpdate(newRow) {
+  if (lastKnownUpdatedAt && newRow.updated_at && newRow.updated_at <= lastKnownUpdatedAt) {
+    return; // כבר טיפלנו בעדכון הזה
+  }
+  lastKnownUpdatedAt = newRow.updated_at;
+
+  const wasActive = GAME.status === "active";
+  Object.assign(GAME, newRow);
+  chess.load(newRow.fen);
+  if (newRow.last_move) {
+    try {
+      const verboseHistory = chess.history({ verbose: true });
+      const lm = verboseHistory[verboseHistory.length - 1];
+      lastMoveSquares = lm ? [lm.from, lm.to] : [];
+    } catch (e) { /* ignore */ }
+  }
+  selectedSquare = null;
+  legalTargets = [];
+  renderBoard();
+  renderMoveList();
+  renderDrawBanner();
+  updateTimersDisplay();
+
+  if (wasActive && newRow.status !== "active") {
+    gameEnded = true;
+    showEndOverlay();
+  }
+}
+
 function subscribeGame() {
+  lastKnownUpdatedAt = GAME.updated_at;
+
   sb.channel("game-" + GAME_ID)
     .on(
       "postgres_changes",
       { event: "UPDATE", schema: "public", table: "games", filter: `id=eq.${GAME_ID}` },
-      (payload) => {
-        const newRow = payload.new;
-        const wasActive = GAME.status === "active";
-        Object.assign(GAME, newRow);
-        chess.load(newRow.fen);
-        if (newRow.last_move) {
-          try {
-            const verboseHistory = chess.history({ verbose: true });
-            const lm = verboseHistory[verboseHistory.length - 1];
-            lastMoveSquares = lm ? [lm.from, lm.to] : [];
-          } catch (e) { /* ignore */ }
-        }
-        selectedSquare = null;
-        legalTargets = [];
-        renderBoard();
-        renderMoveList();
-        renderDrawBanner();
-        updateTimersDisplay();
-
-        if (wasActive && newRow.status !== "active") {
-          gameEnded = true;
-          showEndOverlay();
-        }
-      }
+      (payload) => applyGameUpdate(payload.new)
     )
     .subscribe();
+
+  // גיבוי: בדיקה יזומה כל 2.5 שניות, למקרה שההתראה בזמן-אמת לא הגיעה
+  setInterval(async () => {
+    if (gameEnded) return;
+    const { data } = await sb.from("games").select("*").eq("id", GAME_ID).single();
+    if (data) applyGameUpdate(data);
+  }, 2500);
 }
 
 // ---------------- Move list ----------------
@@ -2635,6 +2678,8 @@ function showEndOverlay() {
 }
 
 // ---------------- In-game chat ----------------
+const seenChatIds = new Set();
+
 async function loadChat() {
   const { data } = await sb
     .from("chat_messages")
@@ -2644,11 +2689,14 @@ async function loadChat() {
     .limit(100);
   const box = document.getElementById("chat-messages");
   box.innerHTML = "";
+  seenChatIds.clear();
   (data || []).forEach((m) => appendChatMessage(m));
   box.scrollTop = box.scrollHeight;
 }
 
 function appendChatMessage(m) {
+  if (seenChatIds.has(m.id)) return;
+  seenChatIds.add(m.id);
   const box = document.getElementById("chat-messages");
   const mine = m.sender_id === ME.id;
   const div = document.createElement("div");
@@ -2669,6 +2717,17 @@ function subscribeChat() {
       }
     )
     .subscribe();
+
+  // גיבוי: משיכת הודעות חדשות כל 2.5 שניות למקרה שהתראת הזמן-האמת לא הגיעה
+  setInterval(async () => {
+    const { data } = await sb
+      .from("chat_messages")
+      .select("id, message, created_at, sender_id, sender:sender_id(username)")
+      .eq("game_id", GAME_ID)
+      .order("created_at", { ascending: true })
+      .limit(100);
+    (data || []).forEach((m) => appendChatMessage(m));
+  }, 2500);
 }
 
   </script>

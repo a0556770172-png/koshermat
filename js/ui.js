@@ -197,6 +197,8 @@ async function sendGameInvite(myId, targetId, targetName) {
   toast(`אתגר נשלח ל${targetName}! ⚔️`, "success");
 }
 
+const handledInviteUpdates = new Set();
+
 function listenForGameInvites(myId) {
   loadPendingInvitesForMe(myId);
   sb.channel("invites-" + myId)
@@ -212,15 +214,36 @@ function listenForGameInvites(myId) {
     .on(
       "postgres_changes",
       { event: "UPDATE", schema: "public", table: "game_invites" },
-      (payload) => {
-        // מי ששלח את האתגר צריך גם הוא לעבור למשחק ברגע שהצד השני קיבל אותו
-        if (payload.new.from_user === myId && payload.new.status === "accepted" && payload.new.game_id) {
-          toast("האתגר התקבל! מעביר אותך למשחק...", "success");
-          setTimeout(() => goToGame(payload.new.game_id), 400);
-        }
-      }
+      (payload) => handleAcceptedInvite(myId, payload.new)
     )
     .subscribe();
+
+  // גיבוי: בדיקה יזומה כל 3 שניות למקרה שההתראה בזמן-אמת לא הגיעה
+  // (בין אם הזמנה חדשה שהתקבלה, ובין אם הזמנה ששלחתי אושרה)
+  setInterval(async () => {
+    const { data: incoming } = await sb
+      .from("game_invites")
+      .select("*, from:from_user(username, avatar_emoji)")
+      .eq("to_user", myId)
+      .eq("status", "pending");
+    (incoming || []).forEach((inv) => showInviteBanner(inv));
+
+    const { data: sent } = await sb
+      .from("game_invites")
+      .select("*")
+      .eq("from_user", myId)
+      .eq("status", "accepted");
+    (sent || []).forEach((inv) => handleAcceptedInvite(myId, inv));
+  }, 3000);
+}
+
+function handleAcceptedInvite(myId, invite) {
+  if (invite.from_user === myId && invite.status === "accepted" && invite.game_id) {
+    if (handledInviteUpdates.has(invite.id)) return;
+    handledInviteUpdates.add(invite.id);
+    toast("האתגר התקבל! מעביר אותך למשחק...", "success");
+    setTimeout(() => goToGame(invite.game_id), 400);
+  }
 }
 
 async function loadPendingInvitesForMe(myId) {
