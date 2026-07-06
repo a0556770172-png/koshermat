@@ -340,16 +340,28 @@ create table if not exists direct_messages (
   id uuid primary key default uuid_generate_v4(),
   sender_id uuid references profiles(id) on delete cascade,
   recipient_id uuid references profiles(id) on delete cascade,
-  message text not null,
+  message text not null default '',
+  attachment_url text,
+  attachment_type text, -- image | video | audio | file
   created_at timestamptz not null default now(),
   read_at timestamptz
 );
 
+-- מיגרציה בטוחה להרצה חוזרת (אם הטבלה כבר קיימת מהרצה קודמת)
+alter table direct_messages add column if not exists attachment_url text;
+alter table direct_messages add column if not exists attachment_type text;
+alter table direct_messages alter column message set default '';
+
 alter table direct_messages enable row level security;
 
+-- הערה: מנהלים יכולים לצפות בכל השיחות (פיקוח), לא רק בשיחות שהם צד להן
 drop policy if exists "participants can view their messages" on direct_messages;
 create policy "participants can view their messages" on direct_messages
-  for select using (auth.uid() = sender_id or auth.uid() = recipient_id);
+  for select using (
+    auth.uid() = sender_id
+    or auth.uid() = recipient_id
+    or exists (select 1 from profiles p where p.id = auth.uid() and p.is_admin)
+  );
 
 drop policy if exists "users can send private messages" on direct_messages;
 create policy "users can send private messages" on direct_messages
@@ -368,6 +380,21 @@ begin
   execute 'alter publication supabase_realtime add table direct_messages';
 exception when duplicate_object then null;
 end $$;
+
+-- ============================================================
+-- אחסון קבצים מצורפים להודעות פרטיות (תמונות/וידאו/אודיו)
+-- ============================================================
+insert into storage.buckets (id, name, public)
+values ('dm-attachments', 'dm-attachments', true)
+on conflict (id) do nothing;
+
+drop policy if exists "authenticated users can upload dm attachments" on storage.objects;
+create policy "authenticated users can upload dm attachments" on storage.objects
+  for insert with check (bucket_id = 'dm-attachments' and auth.uid() is not null);
+
+drop policy if exists "anyone can view dm attachments" on storage.objects;
+create policy "anyone can view dm attachments" on storage.objects
+  for select using (bucket_id = 'dm-attachments');
 
 -- ============================================================
 -- ערעורים על חסימה

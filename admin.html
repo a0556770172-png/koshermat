@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>ניהול ופיקוח — כושרמט</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>♞</text></svg>">
-<link rel="stylesheet" href="css/style.css?v=16" />
+<link rel="stylesheet" href="css/style.css?v=17" />
 </head>
 <body>
   <nav class="navbar" id="navbar"></nav>
@@ -24,6 +24,7 @@
       <button class="tab-btn" data-tab="reports">🚩 דיווחים</button>
       <button class="tab-btn" data-tab="games">♟️ משחקים חיים</button>
       <button class="tab-btn" data-tab="appeals">📨 ערעורים</button>
+      <button class="tab-btn" data-tab="dm-monitor">🕵️ פיקוח שיחות</button>
     </div>
 
     <div class="tab-panel active" data-tab-panel="users">
@@ -55,11 +56,34 @@
     <div class="tab-panel" data-tab-panel="appeals">
       <div id="appeals-list"></div>
     </div>
+
+    <div class="tab-panel" data-tab-panel="dm-monitor">
+      <div class="messages-layout">
+        <div class="card">
+          <div class="section-title" style="font-size:16px;">שיחות במערכת</div>
+          <div id="dm-monitor-list"></div>
+        </div>
+        <div class="card">
+          <div class="section-title" style="font-size:16px;" id="dm-monitor-title">בחר שיחה לצפייה</div>
+          <div class="chat-box">
+            <div class="chat-messages" id="dm-monitor-messages"></div>
+          </div>
+          <form id="dm-admin-form" class="flex flex-col gap-1 mt-2" style="display:none;">
+            <label style="font-size:13px;">שלח הודעה מטעם הניהול אל:</label>
+            <select id="dm-admin-target"></select>
+            <div class="flex gap-1">
+              <input type="text" id="dm-admin-input" placeholder="כתוב הודעה..." autocomplete="off" style="flex:1;" />
+              <button type="submit" class="btn btn-accent" style="padding:10px 16px;">שלח</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-  <script src="js/supabaseClient.js?v=16"></script>
-  <script src="js/ui.js?v=16"></script>
-  <script src="js/admin.js?v=16"></script>
+  <script src="js/supabaseClient.js?v=17"></script>
+  <script src="js/ui.js?v=17"></script>
+  <script src="js/admin.js?v=17"></script>
 </body>
 </html>

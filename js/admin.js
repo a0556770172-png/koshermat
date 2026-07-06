@@ -22,6 +22,27 @@ let ME = null;
   await loadReports();
   await loadGames();
   await loadAppeals();
+  await loadDmMonitor();
+
+  document.getElementById("dm-admin-form").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const targetId = document.getElementById("dm-admin-target").value;
+    const input = document.getElementById("dm-admin-input");
+    const msg = input.value.trim();
+    if (!msg || !targetId) return;
+    input.value = "";
+    const { error } = await sb.from("direct_messages").insert({
+      sender_id: ME.id,
+      recipient_id: targetId,
+      message: msg,
+    });
+    if (error) {
+      toast("שגיאה בשליחה: " + error.message, "error");
+      return;
+    }
+    toast("ההודעה נשלחה מטעם הניהול", "success");
+    if (CURRENT_DM_PAIR) await viewDmPair(CURRENT_DM_PAIR.a, CURRENT_DM_PAIR.b);
+  });
 
   document.getElementById("user-search").addEventListener("input", (e) => renderUsers(e.target.value.trim().toLowerCase()));
 
@@ -273,3 +294,102 @@ async function abortGame(gameId) {
   await loadGames();
 }
 window.abortGame = abortGame;
+
+// ---------------- פיקוח על שיחות פרטיות ----------------
+let CURRENT_DM_PAIR = null;
+
+async function loadDmMonitor() {
+  const { data } = await sb
+    .from("direct_messages")
+    .select("id, message, attachment_type, created_at, sender_id, recipient_id, sender:sender_id(username, avatar_emoji), recipient:recipient_id(username, avatar_emoji)")
+    .order("created_at", { ascending: false })
+    .limit(500);
+
+  const seen = new Set();
+  const pairs = [];
+  for (const m of data || []) {
+    const [a, b] = [m.sender_id, m.recipient_id].sort();
+    const key = a + "_" + b;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    pairs.push({
+      a, b,
+      userA: m.sender_id === a ? m.sender : m.recipient,
+      userB: m.sender_id === b ? m.sender : m.recipient,
+      preview: m.attachment_type ? attachmentLabelAdmin(m.attachment_type) : m.message,
+    });
+  }
+
+  const list = document.getElementById("dm-monitor-list");
+  if (!pairs.length) {
+    list.innerHTML = `<p class="muted text-center">אין עדיין שיחות פרטיות במערכת</p>`;
+    return;
+  }
+  list.innerHTML = pairs
+    .map(
+      (p) => `
+      <div class="conversation-item" onclick='viewDmPair(${JSON.stringify(p.a)}, ${JSON.stringify(p.b)})'>
+        <span>${escapeHtml(p.userA?.username || "?")} ⇄ ${escapeHtml(p.userB?.username || "?")}</span>
+        <span class="muted" style="font-size:12px; max-width:120px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(p.preview || "")}</span>
+      </div>`
+    )
+    .join("");
+}
+
+function attachmentLabelAdmin(type) {
+  if (type === "image") return "📷 תמונה";
+  if (type === "video") return "🎬 וידאו";
+  if (type === "audio") return "🎵 קובץ שמע";
+  return "📎 קובץ מצורף";
+}
+
+async function viewDmPair(userAId, userBId) {
+  CURRENT_DM_PAIR = { a: userAId, b: userBId };
+
+  const { data: messages } = await sb
+    .from("direct_messages")
+    .select("id, message, attachment_url, attachment_type, created_at, sender_id, recipient_id, sender:sender_id(username)")
+    .or(
+      `and(sender_id.eq.${userAId},recipient_id.eq.${userBId}),and(sender_id.eq.${userBId},recipient_id.eq.${userAId})`
+    )
+    .order("created_at", { ascending: true })
+    .limit(500);
+
+  const { data: profilesData } = await sb.from("profiles").select("id, username").in("id", [userAId, userBId]);
+  const nameOf = (id) => profilesData?.find((p) => p.id === id)?.username || "?";
+
+  document.getElementById("dm-monitor-title").textContent = `${nameOf(userAId)} ⇄ ${nameOf(userBId)}`;
+
+  const box = document.getElementById("dm-monitor-messages");
+  box.innerHTML = (messages || [])
+    .map((m) => {
+      const attachment = renderAttachmentAdmin(m);
+      return `<div class="chat-msg"><span class="sender">${escapeHtml(m.sender?.username || "?")}</span>${escapeHtml(m.message || "")}${attachment}</div>`;
+    })
+    .join("");
+  box.scrollTop = box.scrollHeight;
+
+  const targetSelect = document.getElementById("dm-admin-target");
+  targetSelect.innerHTML = `
+    <option value="${userAId}">${escapeHtml(nameOf(userAId))}</option>
+    <option value="${userBId}">${escapeHtml(nameOf(userBId))}</option>
+  `;
+  document.getElementById("dm-admin-form").style.display = "flex";
+}
+window.viewDmPair = viewDmPair;
+
+function renderAttachmentAdmin(m) {
+  if (!m.attachment_url) return "";
+  const url = m.attachment_url;
+  if (m.attachment_type === "image") {
+    return `<a href="${url}" target="_blank" rel="noopener"><img src="${url}" style="max-width:200px; max-height:200px; border-radius:10px; margin-top:6px; display:block;" /></a>`;
+  }
+  if (m.attachment_type === "video") {
+    return `<video src="${url}" controls style="max-width:220px; max-height:220px; border-radius:10px; margin-top:6px; display:block;"></video>`;
+  }
+  if (m.attachment_type === "audio") {
+    return `<audio src="${url}" controls style="margin-top:6px; display:block; max-width:220px;"></audio>`;
+  }
+  return `<a href="${url}" target="_blank" rel="noopener" class="btn btn-ghost" style="margin-top:6px; display:inline-block; padding:6px 10px; font-size:12px;">📎 פתח קובץ</a>`;
+}
+
