@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 <title>משחק — כושרמט</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>♞</text></svg>">
-<link rel="stylesheet" href="css/style.css?v=10" />
+<link rel="stylesheet" href="css/style.css?v=11" />
 </head>
 <body>
   <nav class="navbar" id="navbar"></nav>
@@ -2443,15 +2443,22 @@ async function makeMove(from, to, promotion) {
     draw_offered_by: null,
   };
 
-  const { error } = await sb.from("games").update(update).eq("id", GAME_ID);
-  if (error) {
+  // חשוב: מוסיפים .select() ובודקים כמה שורות באמת התעדכנו - כי אם מדיניות
+  // RLS חוסמת את העדכון בשקט (0 שורות עודכנו), sb.from(...).update(...) עדיין
+  // מחזיר error=null! זו הסיבה שהמהלך "נראה תקין" מקומית אבל אף פעם לא נשמר
+  // בפועל בשרת ולכן היריב לעולם לא רואה אותו.
+  const { data, error } = await sb.from("games").update(update).eq("id", GAME_ID).select();
+  if (error || !data || data.length === 0) {
     // המהלך לא נשמר בפועל בשרת - מבטלים אותו גם מקומית כדי לא להטעות
-    // את השחקן, ומציגים את השגיאה האמיתית (לצורך אבחון) במקום הודעה כללית
+    // את השחקן, ומציגים שגיאה מפורשת (לצורך אבחון) במקום הודעה כללית
     chess.undo();
     lastMoveSquares = previousLastMoveSquares;
     renderBoard();
     renderMoveList();
-    toast("שגיאה בשליחת המהלך: " + (error.message || error.details || JSON.stringify(error)), "error");
+    const msg = error
+      ? (error.message || error.details || JSON.stringify(error))
+      : "0 שורות עודכנו - כנראה שאין לך הרשאה (RLS) לעדכן את המשחק הזה";
+    toast("שגיאה בשליחת המהלך: " + msg, "error");
     return;
   }
   Object.assign(GAME, update);
