@@ -237,11 +237,17 @@ function listenForGameInvites(myId) {
   }, 3000);
 }
 
-function handleAcceptedInvite(myId, invite) {
+async function handleAcceptedInvite(myId, invite) {
   if (invite.from_user === myId && invite.status === "accepted" && invite.game_id) {
     if (handledInviteUpdates.has(invite.id)) return;
     handledInviteUpdates.add(invite.id);
     toast("האתגר התקבל! מעביר אותך למשחק...", "success");
+    // מסמנים את ההזמנה כ"מטופלת" בבסיס הנתונים כדי שלא תמשיך "לתפוס" אותנו
+    // שוב בכל בדיקת polling/טעינת דף עתידית - זו הסיבה שהדף היה "מתרענן"
+    // שוב ושוב: הזמנה ישנה שכבר טופלה המשיכה לחזור ולהכריח ניתוב מחדש.
+    try {
+      await sb.from("game_invites").update({ status: "used" }).eq("id", invite.id).eq("status", "accepted");
+    } catch (e) { /* ignore - ננווט בכל מקרה */ }
     setTimeout(() => goToGame(invite.game_id), 400);
   }
 }

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 <title>משחק — כושרמט</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>♞</text></svg>">
-<link rel="stylesheet" href="css/style.css?v=8" />
+<link rel="stylesheet" href="css/style.css?v=9" />
 </head>
 <body>
   <nav class="navbar" id="navbar"></nav>
@@ -2087,11 +2087,17 @@ function listenForGameInvites(myId) {
   }, 3000);
 }
 
-function handleAcceptedInvite(myId, invite) {
+async function handleAcceptedInvite(myId, invite) {
   if (invite.from_user === myId && invite.status === "accepted" && invite.game_id) {
     if (handledInviteUpdates.has(invite.id)) return;
     handledInviteUpdates.add(invite.id);
     toast("האתגר התקבל! מעביר אותך למשחק...", "success");
+    // מסמנים את ההזמנה כ"מטופלת" בבסיס הנתונים כדי שלא תמשיך "לתפוס" אותנו
+    // שוב בכל בדיקת polling/טעינת דף עתידית - זו הסיבה שהדף היה "מתרענן"
+    // שוב ושוב: הזמנה ישנה שכבר טופלה המשיכה לחזור ולהכריח ניתוב מחדש.
+    try {
+      await sb.from("game_invites").update({ status: "used" }).eq("id", invite.id).eq("status", "accepted");
+    } catch (e) { /* ignore - ננווט בכל מקרה */ }
     setTimeout(() => goToGame(invite.game_id), 400);
   }
 }
