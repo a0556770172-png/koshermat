@@ -84,3 +84,19 @@ formLogin.addEventListener("submit", async (e) => {
   toast("התחברת בהצלחה!", "success");
   setTimeout(() => (window.location.href = "lobby.html"), 500);
 });
+
+document.getElementById("forgot-password-link").addEventListener("click", async () => {
+  const email = document.getElementById("login-email").value.trim();
+  if (!email) {
+    toast("קודם תכתוב את כתובת האימייל שלך בשדה למעלה", "error");
+    return;
+  }
+  const { error } = await sb.auth.resetPasswordForEmail(email, {
+    redirectTo: window.location.origin + window.location.pathname.replace(/auth\.html$/, "reset-password.html"),
+  });
+  if (error) {
+    toast("שגיאה: " + error.message, "error");
+    return;
+  }
+  toast("נשלח מייל לאיפוס סיסמה - בדוק את תיבת הדואר שלך", "success");
+});
