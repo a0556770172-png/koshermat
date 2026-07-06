@@ -191,6 +191,31 @@ drop trigger if exists trg_games_updated_at on games;
 create trigger trg_games_updated_at before update on games
   for each row execute function touch_games_updated_at();
 
+-- חשוב: מחשבים את זמן השעון (הורדת הזמן שחלף מהשחקן שהזיז) לפי שעון
+-- השרת (now()) ולא לפי הערכים שהלקוח שלח - כי אם השעון של המכשיר של אחד
+-- השחקנים לא מכוון נכון, זה היה "מזהם" את last_move_at ואת יתרת הזמן
+-- ששני הצדדים רואים, וגורם לפער בין השעונים שמוצגים אצל שני השחקנים.
+create or replace function server_track_move_time()
+returns trigger language plpgsql as $$
+declare
+  elapsed_ms bigint;
+begin
+  if new.fen is distinct from old.fen and old.status = 'active' then
+    elapsed_ms := floor(extract(epoch from (now() - old.last_move_at)) * 1000);
+    if old.turn = 'w' then
+      new.white_time_ms := greatest(0, old.white_time_ms - elapsed_ms);
+    else
+      new.black_time_ms := greatest(0, old.black_time_ms - elapsed_ms);
+    end if;
+    new.last_move_at := now();
+  end if;
+  return new;
+end; $$;
+
+drop trigger if exists trg_games_track_move_time on games;
+create trigger trg_games_track_move_time before update on games
+  for each row execute function server_track_move_time();
+
 -- ============================================================
 -- תור השידוכים (matchmaking)
 -- ============================================================
