@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>ניהול ופיקוח — כושרמט</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>♞</text></svg>">
-<link rel="stylesheet" href="css/style.css?v=18" />
+<link rel="stylesheet" href="css/style.css?v=19" />
 </head>
 <body>
   <nav class="navbar" id="navbar"></nav>
@@ -25,6 +25,7 @@
       <button class="tab-btn" data-tab="games">♟️ משחקים חיים</button>
       <button class="tab-btn" data-tab="appeals">📨 ערעורים</button>
       <button class="tab-btn" data-tab="dm-monitor">🕵️ פיקוח שיחות</button>
+      <button class="tab-btn" data-tab="emergency">🆘 גישת חירום</button>
     </div>
 
     <div class="tab-panel active" data-tab-panel="users">
@@ -57,6 +58,15 @@
       <div id="appeals-list"></div>
     </div>
 
+    <div class="tab-panel" data-tab-panel="emergency">
+      <div class="card" style="font-size:13px; margin-bottom:14px;">
+        בקשות גישת חירום מגיעות כשמשתמש לוחץ 5 שניות על הלוגו בדף הבית
+        ומזין מייל. אישור כאן שולח למשתמש קישור כניסה ישיר למייל, ללא
+        הרשמה או סיסמה - השתמש בזה רק במצבי חירום אמיתיים.
+      </div>
+      <div id="emergency-requests-list"></div>
+    </div>
+
     <div class="tab-panel" data-tab-panel="dm-monitor">
       <div class="messages-layout">
         <div class="card">
@@ -81,9 +91,9 @@
     </div>
   </div>
 
-  <script src="js/supabase-sdk.js?v=18"></script>
-  <script src="js/supabaseClient.js?v=18"></script>
-  <script src="js/ui.js?v=18"></script>
-  <script src="js/admin.js?v=18"></script>
+  <script src="js/supabase-sdk.js?v=19"></script>
+  <script src="js/supabaseClient.js?v=19"></script>
+  <script src="js/ui.js?v=19"></script>
+  <script src="js/admin.js?v=19"></script>
 </body>
 </html>

@@ -767,6 +767,87 @@ exception when duplicate_object then null;
 end $$;
 
 -- ============================================================
+-- בקשות גישת חירום (יצירת משתמש ללא הרשמה רגילה - למצבי חירום
+-- כשההרשמה הרגילה לא עובדת). לחיצה ארוכה על הלוגו בדף הבית
+-- פותחת טופס שבו כותבים מייל, הבקשה נשלחת מיידית לניהול לאישור,
+-- ולאחר אישור נשלח למשתמש קישור כניסה ישיר (magic link) למייל -
+-- בלי סיסמה ובלי תהליך אימות רגיל.
+-- ============================================================
+create table if not exists emergency_access_requests (
+  id uuid primary key default uuid_generate_v4(),
+  email text not null,
+  status text not null default 'pending', -- pending | approved | rejected
+  created_at timestamptz not null default now(),
+  reviewed_by uuid references profiles(id),
+  reviewed_at timestamptz
+);
+
+alter table emergency_access_requests enable row level security;
+
+-- כל אחד (גם ללא התחברות) יכול לשלוח בקשת גישת חירום
+drop policy if exists "anyone can submit emergency access request" on emergency_access_requests;
+create policy "anyone can submit emergency access request" on emergency_access_requests
+  for insert with check (true);
+
+-- רק מנהלים יכולים לצפות ברשימת הבקשות (המבקש עצמו בודק סטטוס
+-- דרך הפונקציה הייעודית get_emergency_request_status למטה, כדי
+-- שלא נחשוף מיילים של בקשות אחרות למי שלא מחובר)
+drop policy if exists "admins can view emergency requests" on emergency_access_requests;
+create policy "admins can view emergency requests" on emergency_access_requests
+  for select using (exists (select 1 from profiles p where p.id = auth.uid() and p.is_admin));
+
+do $$
+begin
+  execute 'alter publication supabase_realtime add table emergency_access_requests';
+exception when duplicate_object then null;
+end $$;
+
+-- פונקציה: המבקש (גם ללא התחברות) בודק את סטטוס הבקשה שלו לפי
+-- מזהה ה-UUID שקיבל בתשובה להוספה - בלי לחשוף שורות של בקשות אחרות
+create or replace function get_emergency_request_status(p_id uuid)
+returns text
+language sql
+security definer
+set search_path = public
+as $$
+  select status from emergency_access_requests where id = p_id;
+$$;
+
+-- פונקציית ניהול: אישור בקשת גישת חירום (admin בלבד)
+create or replace function admin_approve_emergency_access(p_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not exists (select 1 from profiles where id = auth.uid() and is_admin) then
+    raise exception 'not authorized';
+  end if;
+  update emergency_access_requests
+    set status = 'approved', reviewed_by = auth.uid(), reviewed_at = now()
+    where id = p_id and status = 'pending';
+end;
+$$;
+
+-- פונקציית ניהול: דחיית בקשת גישת חירום (admin בלבד)
+create or replace function admin_reject_emergency_access(p_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not exists (select 1 from profiles where id = auth.uid() and is_admin) then
+    raise exception 'not authorized';
+  end if;
+  update emergency_access_requests
+    set status = 'rejected', reviewed_by = auth.uid(), reviewed_at = now()
+    where id = p_id and status = 'pending';
+end;
+$$;
+
+-- ============================================================
 -- סיום. קובץ זה בטוח להרצה חוזרת (idempotent) - אפשר להריץ שוב בעתיד
 -- בלי חשש משגיאות "already exists".
 --

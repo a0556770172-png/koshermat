@@ -23,6 +23,7 @@ let ME = null;
   await loadGames();
   await loadAppeals();
   await loadDmMonitor();
+  await loadEmergencyRequests();
 
   document.getElementById("dm-admin-form").addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -393,3 +394,58 @@ function renderAttachmentAdmin(m) {
   return `<a href="${url}" target="_blank" rel="noopener" class="btn btn-ghost" style="margin-top:6px; display:inline-block; padding:6px 10px; font-size:12px;">📎 פתח קובץ</a>`;
 }
 
+
+// ---------------- גישת חירום ----------------
+async function loadEmergencyRequests() {
+  const { data } = await sb
+    .from("emergency_access_requests")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  const box = document.getElementById("emergency-requests-list");
+  if (!data || !data.length) {
+    box.innerHTML = `<p class="muted text-center">אין בקשות גישת חירום</p>`;
+    return;
+  }
+  const badgeClass = { pending: "open", approved: "actioned", rejected: "dismissed" };
+  const badgeLabel = { pending: "ממתין", approved: "אושר", rejected: "נדחה" };
+  box.innerHTML = data
+    .map(
+      (r) => `
+    <div class="card" style="margin-bottom:10px;">
+      <div class="flex" style="justify-content:space-between; align-items:start;">
+        <div>
+          <div><b>${escapeHtml(r.email)}</b></div>
+          <div class="muted" style="font-size:12px; margin-top:4px;">${timeAgo(r.created_at)}</div>
+        </div>
+        <span class="badge ${badgeClass[r.status] || ""}">${badgeLabel[r.status] || r.status}</span>
+      </div>
+      ${
+        r.status === "pending"
+          ? `<div class="flex gap-1 mt-2">
+              <button class="btn btn-accent" style="padding:6px 12px; font-size:12px;" onclick="approveEmergencyRequest('${r.id}')">✔️ אשר גישה</button>
+              <button class="btn btn-ghost" style="padding:6px 12px; font-size:12px;" onclick="rejectEmergencyRequest('${r.id}')">✖️ דחה</button>
+            </div>`
+          : ""
+      }
+    </div>`
+    )
+    .join("");
+}
+
+async function approveEmergencyRequest(id) {
+  if (!confirm("לאשר גישת חירום למייל זה? המשתמש ייכנס ישירות ללא הרשמה רגילה.")) return;
+  const { error } = await sb.rpc("admin_approve_emergency_access", { p_id: id });
+  if (error) return toast("שגיאה: " + error.message, "error");
+  toast("הבקשה אושרה - למשתמש נשלח קישור כניסה למייל", "success");
+  await loadEmergencyRequests();
+}
+window.approveEmergencyRequest = approveEmergencyRequest;
+
+async function rejectEmergencyRequest(id) {
+  const { error } = await sb.rpc("admin_reject_emergency_access", { p_id: id });
+  if (error) return toast("שגיאה: " + error.message, "error");
+  toast("הבקשה נדחתה", "success");
+  await loadEmergencyRequests();
+}
+window.rejectEmergencyRequest = rejectEmergencyRequest;
