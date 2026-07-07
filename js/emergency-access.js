@@ -61,30 +61,39 @@
 
       if (status === "approved") {
         clearInterval(pollTimer);
-        const email = sessionStorage.getItem(EMAIL_KEY);
-        statusBox.innerHTML = `<span class="spinner"></span> הבקשה אושרה! שולח קישור כניסה למייל שלך...`;
+        statusBox.innerHTML = `<span class="spinner"></span> הבקשה אושרה! מתחבר אותך ישירות...`;
 
-        const { error: otpError } = await sb.auth.signInWithOtp({
-          email,
-          options: {
-            shouldCreateUser: true,
-            emailRedirectTo:
-              window.location.origin +
-              window.location.pathname.replace(/emergency-access\.html$/, "lobby.html"),
-          },
-        });
+        try {
+          const { data: fnData, error: fnError } = await sb.functions.invoke("emergency-login", {
+            body: { request_id: id },
+          });
 
-        sessionStorage.removeItem(ID_KEY);
-        sessionStorage.removeItem(EMAIL_KEY);
+          if (fnError || !fnData || fnData.error) {
+            statusBox.innerHTML = `❌ שגיאה בהתחברות: ${escapeHtml(
+              (fnData && fnData.error) || (fnError && fnError.message) || "שגיאה לא ידועה"
+            )}`;
+            return;
+          }
 
-        if (otpError) {
-          statusBox.innerHTML = `❌ שגיאה בשליחת קישור הכניסה: ${escapeHtml(otpError.message)}`;
-          return;
+          const { error: verifyError } = await sb.auth.verifyOtp({
+            email: fnData.email,
+            token_hash: fnData.token_hash,
+            type: "magiclink",
+          });
+
+          sessionStorage.removeItem(ID_KEY);
+          sessionStorage.removeItem(EMAIL_KEY);
+
+          if (verifyError) {
+            statusBox.innerHTML = `❌ שגיאה באימות הכניסה: ${escapeHtml(verifyError.message)}`;
+            return;
+          }
+
+          statusBox.innerHTML = `✅ מחובר! מעביר אותך ללובי...`;
+          setTimeout(() => (window.location.href = "lobby.html"), 500);
+        } catch (err) {
+          statusBox.innerHTML = `❌ שגיאה בהתחברות - נסה לרענן את הדף ולבדוק שוב`;
         }
-
-        statusBox.innerHTML = `✅ הבקשה אושרה! שלחנו קישור כניסה למייל <b>${escapeHtml(
-          email
-        )}</b> - פתח את תיבת הדואר שלך ולחץ על הקישור כדי להיכנס ישירות, ללא הרשמה נוספת.`;
       } else if (status === "rejected") {
         clearInterval(pollTimer);
         sessionStorage.removeItem(ID_KEY);
