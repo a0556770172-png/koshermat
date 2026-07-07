@@ -26,11 +26,7 @@
     btn.innerHTML = `<span class="spinner"></span> שולח...`;
 
     try {
-      const { data, error } = await sb
-        .from("emergency_access_requests")
-        .insert({ email })
-        .select()
-        .single();
+      const { data, error } = await sb.rpc("submit_emergency_access_request", { p_email: email });
 
       if (error) {
         toast("שגיאה בשליחת הבקשה: " + error.message, "error");
@@ -39,9 +35,9 @@
         return;
       }
 
-      sessionStorage.setItem(ID_KEY, data.id);
+      sessionStorage.setItem(ID_KEY, data);
       sessionStorage.setItem(EMAIL_KEY, email);
-      startPolling(data.id);
+      startPolling(data);
     } catch (err) {
       toast("אין תגובה מהשרת - בדוק את החיבור לאינטרנט ונסה שוב", "error");
       btn.disabled = false;

@@ -847,6 +847,25 @@ begin
 end;
 $$;
 
+-- פונקציה: שליחת בקשת גישת חירום (כל אחד, גם ללא התחברות) - עוקפת RLS
+-- כדי להימנע מבעיה ידועה: הוספת שורה עם .insert().select() מנסה גם
+-- לקרוא בחזרה את השורה שנוספה, וזה נכשל אם אין למבקש הרשאת SELECT
+-- על הטבלה (יש רק למנהלים). הפונקציה מחזירה רק את ה-UUID של הבקשה,
+-- בלי לחשוף את הטבלה עצמה לקריאה ישירה מצד אורחים.
+create or replace function submit_emergency_access_request(p_email text)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  new_id uuid;
+begin
+  insert into emergency_access_requests (email) values (p_email) returning id into new_id;
+  return new_id;
+end;
+$$;
+
 -- ============================================================
 -- סיום. קובץ זה בטוח להרצה חוזרת (idempotent) - אפשר להריץ שוב בעתיד
 -- בלי חשש משגיאות "already exists".
