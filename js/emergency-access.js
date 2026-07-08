@@ -109,7 +109,6 @@
 
           const { error: verifyError } = await withRetry(() =>
             sb.auth.verifyOtp({
-              email: fnData.email,
               token_hash: fnData.token_hash,
               type: "magiclink",
             })
@@ -169,7 +168,6 @@
 
       const { error: verifyError } = await withRetry(() =>
         sb.auth.verifyOtp({
-          email: fnData.email,
           token_hash: fnData.token_hash,
           type: "magiclink",
         })
