@@ -43,11 +43,13 @@ formSignup.addEventListener("submit", async (e) => {
   // עוטפים ב-try/catch כדי שהכפתור לעולם לא יישאר תקוע אם הבקשה נכשלת
   // באופן לא צפוי (כולל timeout של הרשת שהוגדר ב-supabaseClient.js)
   try {
-    const { data, error } = await sb.auth.signUp({
-      email,
-      password,
-      options: { data: { username } },
-    });
+    const { data, error } = await withRetry(() =>
+      sb.auth.signUp({
+        email,
+        password,
+        options: { data: { username } },
+      })
+    );
 
     if (error) {
       toast("שגיאה בהרשמה: " + error.message, "error");
@@ -81,7 +83,7 @@ formLogin.addEventListener("submit", async (e) => {
   btn.innerHTML = `<span class="spinner"></span> מתחבר...`;
 
   try {
-    const { error } = await sb.auth.signInWithPassword({ email, password });
+    const { error } = await withRetry(() => sb.auth.signInWithPassword({ email, password }));
 
     if (error) {
       toast("שגיאה בהתחברות: " + error.message, "error");
@@ -106,15 +108,17 @@ document.getElementById("forgot-password-link").addEventListener("click", async 
     return;
   }
   try {
-    const { error } = await sb.auth.resetPasswordForEmail(email, {
-      redirectTo: window.location.origin + window.location.pathname.replace(/auth\.html$/, "reset-password.html"),
-    });
+    const { error } = await withRetry(() =>
+      sb.auth.resetPasswordForEmail(email, {
+        redirectTo: window.location.origin + window.location.pathname.replace(/auth\.html$/, "reset-password.html"),
+      })
+    );
     if (error) {
       toast("שגיאה: " + error.message, "error");
       return;
     }
     toast("נשלח מייל לאיפוס סיסמה - בדוק את תיבת הדואר שלך", "success");
   } catch (err) {
-    toast("אין תגובה מהשרת - בדוק את החיבור לאינטרנט ונסה שוב", "error");
+    toast("אין תגובה מהשרת - בדוק את החיבור לאינטרנט ונסה שוב: " + (err && err.message ? err.message : String(err)), "error");
   }
 });

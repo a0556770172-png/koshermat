@@ -26,7 +26,9 @@
     btn.innerHTML = `<span class="spinner"></span> שולח...`;
 
     try {
-      const { data, error } = await sb.rpc("submit_emergency_access_request", { p_email: email });
+      const { data, error } = await withRetry(() =>
+        sb.rpc("submit_emergency_access_request", { p_email: email })
+      );
 
       if (error) {
         toast("שגיאה בשליחת הבקשה: " + error.message, "error");
@@ -39,7 +41,11 @@
       sessionStorage.setItem(EMAIL_KEY, email);
       startPolling(data);
     } catch (err) {
-      toast("אין תגובה מהשרת - בדוק את החיבור לאינטרנט ונסה שוב", "error");
+      toast(
+        "אין תגובה מהשרת אחרי כמה ניסיונות - בדוק את החיבור לאינטרנט ונסה שוב: " +
+          (err && err.message ? err.message : String(err)),
+        "error"
+      );
       btn.disabled = false;
       btn.textContent = "שלח בקשה למנהל";
     }
@@ -64,9 +70,9 @@
         statusBox.innerHTML = `<span class="spinner"></span> הבקשה אושרה! מתחבר אותך ישירות...`;
 
         try {
-          const { data: fnData, error: fnError } = await sb.functions.invoke("emergency-login", {
-            body: { request_id: id },
-          });
+          const { data: fnData, error: fnError } = await withRetry(() =>
+            sb.functions.invoke("emergency-login", { body: { request_id: id } })
+          );
 
           if (fnError || !fnData || fnData.error) {
             statusBox.innerHTML = `❌ שגיאה בהתחברות: ${escapeHtml(
@@ -75,11 +81,13 @@
             return;
           }
 
-          const { error: verifyError } = await sb.auth.verifyOtp({
-            email: fnData.email,
-            token_hash: fnData.token_hash,
-            type: "magiclink",
-          });
+          const { error: verifyError } = await withRetry(() =>
+            sb.auth.verifyOtp({
+              email: fnData.email,
+              token_hash: fnData.token_hash,
+              type: "magiclink",
+            })
+          );
 
           sessionStorage.removeItem(ID_KEY);
           sessionStorage.removeItem(EMAIL_KEY);
@@ -92,7 +100,9 @@
           statusBox.innerHTML = `✅ מחובר! מעביר אותך ללובי...`;
           setTimeout(() => (window.location.href = "lobby.html"), 500);
         } catch (err) {
-          statusBox.innerHTML = `❌ שגיאה בהתחברות - נסה לרענן את הדף ולבדוק שוב`;
+          statusBox.innerHTML = `❌ שגיאה בהתחברות - נסה לרענן את הדף ולבדוק שוב: ${escapeHtml(
+            (err && err.message) || String(err)
+          )}`;
         }
       } else if (status === "rejected") {
         clearInterval(pollTimer);
