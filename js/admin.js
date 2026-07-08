@@ -24,6 +24,7 @@ let ME = null;
   await loadAppeals();
   await loadDmMonitor();
   await loadEmergencyRequests();
+  await loadGuestCode();
 
   document.getElementById("dm-admin-form").addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -48,6 +49,8 @@ let ME = null;
   document.getElementById("user-search").addEventListener("input", (e) => renderUsers(e.target.value.trim().toLowerCase()));
 
   document.getElementById("abort-all-games-btn").addEventListener("click", abortAllGames);
+
+  document.getElementById("save-guest-code-btn").addEventListener("click", saveGuestCode);
 })();
 
 async function abortAllGames() {
@@ -394,6 +397,26 @@ function renderAttachmentAdmin(m) {
   return `<a href="${url}" target="_blank" rel="noopener" class="btn btn-ghost" style="margin-top:6px; display:inline-block; padding:6px 10px; font-size:12px;">📎 פתח קובץ</a>`;
 }
 
+
+// ---------------- קוד גישת אורח ----------------
+async function loadGuestCode() {
+  const { data, error } = await sb.rpc("admin_get_guest_code");
+  if (error) return;
+  const code = Array.isArray(data) ? data[0] : data;
+  document.getElementById("guest-code-value").value = code || "";
+}
+
+async function saveGuestCode() {
+  const input = document.getElementById("guest-code-value");
+  const code = input.value.trim();
+  if (!code) {
+    toast("יש להזין קוד גישה", "error");
+    return;
+  }
+  const { error } = await sb.rpc("admin_set_guest_code", { p_code: code });
+  if (error) return toast("שגיאה בשמירת הקוד: " + error.message, "error");
+  toast("קוד גישת האורח נשמר בהצלחה", "success");
+}
 
 // ---------------- גישת חירום ----------------
 async function loadEmergencyRequests() {

@@ -883,6 +883,58 @@ end;
 $$;
 
 -- ============================================================
+-- ============================================================
+-- קוד גישת אורח (Guest Access Code) - כניסה מיידית ומלאה לאתר עם
+-- קוד קבוע שהמנהל מגדיר בפאנל הניהול. מי שמזין את הקוד הנכון במסך
+-- "כניסה למורשים" נכנס ישר פנימה - בלי מייל, בלי שם משתמש, בלי שום
+-- שלב נוסף. לאחר הכניסה אפשר (לא חובה) להגדיר בפרופיל מייל/סיסמה/
+-- שם משתמש קבועים במקום החשבון הזמני.
+-- ============================================================
+create table if not exists app_config (
+  key text primary key,
+  value text
+);
+
+alter table app_config enable row level security;
+
+-- אין גישה ישירה בכלל לטבלה הזו מבחוץ (גם לא ממשתמש מחובר) - הכל
+-- קורה דרך פונקציות SECURITY DEFINER למטה (לניהול) או דרך ה-Edge
+-- Function guest-access עם מפתח השירות (לבדיקת הקוד בזמן כניסה),
+-- כדי שאף אחד לא יוכל "לקרוא" את הקוד הסודי ישירות מהטבלה.
+drop policy if exists "no direct access to app_config" on app_config;
+create policy "no direct access to app_config" on app_config for all using (false);
+
+-- פונקציית ניהול: הגדרת/עדכון קוד גישת האורח (admin בלבד)
+create or replace function admin_set_guest_code(p_code text)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not exists (select 1 from profiles where id = auth.uid() and is_admin) then
+    raise exception 'not authorized';
+  end if;
+  insert into app_config (key, value) values ('guest_access_code', p_code)
+  on conflict (key) do update set value = excluded.value;
+end;
+$$;
+
+-- פונקציית ניהול: קריאת קוד גישת האורח הנוכחי, לתצוגה בפאנל הניהול (admin בלבד)
+create or replace function admin_get_guest_code()
+returns text
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not exists (select 1 from profiles where id = auth.uid() and is_admin) then
+    raise exception 'not authorized';
+  end if;
+  return (select value from app_config where key = 'guest_access_code');
+end;
+$$;
+
 -- סיום. קובץ זה בטוח להרצה חוזרת (idempotent) - אפשר להריץ שוב בעתיד
 -- בלי חשש משגיאות "already exists".
 --

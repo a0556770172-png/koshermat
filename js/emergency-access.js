@@ -1,11 +1,37 @@
 // ==========================================================
-// גישת חירום - יצירת משתמש ללא הרשמה רגילה (למצבי חירום)
+// גישת חירום - יצירת משתמש ללא הרשמה רגילה (למצבי חירום), ובנוסף
+// כניסת אורח מיידית עם קוד גישה קבוע שהמנהל מגדיר - בלי מייל,
+// בלי שם משתמש, בלי אישור מנהל בכלל.
 // ==========================================================
 
 (function () {
   const form = document.getElementById("emergency-form");
   const statusBox = document.getElementById("emergency-status");
   const emailInput = document.getElementById("emergency-email");
+
+  const tabRequest = document.getElementById("tab-request");
+  const tabCode = document.getElementById("tab-code");
+  const guestCodeForm = document.getElementById("guest-code-form");
+  const guestCodeStatus = document.getElementById("guest-code-status");
+  const guestCodeInput = document.getElementById("guest-code-input");
+
+  // ---------------- מעבר בין הטאבים ----------------
+  tabRequest.addEventListener("click", () => {
+    tabRequest.classList.add("active");
+    tabCode.classList.remove("active");
+    form.classList.add("active");
+    guestCodeForm.classList.remove("active");
+    statusBox.style.display = existingId ? "block" : "none";
+    guestCodeStatus.style.display = "none";
+  });
+
+  tabCode.addEventListener("click", () => {
+    tabCode.classList.add("active");
+    tabRequest.classList.remove("active");
+    guestCodeForm.classList.add("active");
+    form.classList.remove("active");
+    statusBox.style.display = "none";
+  });
 
   const ID_KEY = "koshermat_emergency_request_id";
   const EMAIL_KEY = "koshermat_emergency_request_email";
@@ -114,4 +140,56 @@
       // מתעלמים משגיאת רשת חד-פעמית בפולינג - ננסה שוב בסבב הבא
     }
   }
+
+  // ---------------- כניסת אורח מיידית עם קוד גישה ----------------
+  guestCodeForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const code = guestCodeInput.value.trim();
+    if (!code) return;
+
+    const btn = guestCodeForm.querySelector("button[type=submit]");
+    btn.disabled = true;
+    btn.innerHTML = `<span class="spinner"></span> נכנס...`;
+    guestCodeStatus.style.display = "block";
+    guestCodeStatus.innerHTML = `<span class="spinner"></span> בודק את הקוד...`;
+
+    try {
+      const { data: fnData, error: fnError } = await withRetry(() =>
+        sb.functions.invoke("guest-access", { body: { code } })
+      );
+
+      if (fnError || !fnData || fnData.error) {
+        guestCodeStatus.innerHTML = `❌ ${escapeHtml(
+          (fnData && fnData.error) || (fnError && fnError.message) || "קוד גישה שגוי"
+        )}`;
+        btn.disabled = false;
+        btn.textContent = "כניסה מיידית";
+        return;
+      }
+
+      const { error: verifyError } = await withRetry(() =>
+        sb.auth.verifyOtp({
+          email: fnData.email,
+          token_hash: fnData.token_hash,
+          type: "magiclink",
+        })
+      );
+
+      if (verifyError) {
+        guestCodeStatus.innerHTML = `❌ שגיאה בכניסה: ${escapeHtml(verifyError.message)}`;
+        btn.disabled = false;
+        btn.textContent = "כניסה מיידית";
+        return;
+      }
+
+      guestCodeStatus.innerHTML = `✅ נכנסת בהצלחה! מעביר אותך ללובי...`;
+      setTimeout(() => (window.location.href = "lobby.html"), 500);
+    } catch (err) {
+      guestCodeStatus.innerHTML = `❌ אין תגובה מהשרת - בדוק את החיבור לאינטרנט ונסה שוב: ${escapeHtml(
+        (err && err.message) || String(err)
+      )}`;
+      btn.disabled = false;
+      btn.textContent = "כניסה מיידית";
+    }
+  });
 })();

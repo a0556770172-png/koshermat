@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>ניהול ופיקוח — כושרמט</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>♞</text></svg>">
-<link rel="stylesheet" href="css/style.css?v=24" />
+<link rel="stylesheet" href="css/style.css?v=25" />
 </head>
 <body>
   <nav class="navbar" id="navbar"></nav>
@@ -59,6 +59,18 @@
     </div>
 
     <div class="tab-panel" data-tab-panel="emergency">
+      <div class="card" style="margin-bottom:14px;">
+        <div class="section-title" style="font-size:15px;">🔑 קוד גישת אורח</div>
+        <p class="muted" style="font-size:12px; margin-bottom:10px;">
+          כל מי שמזין את הקוד הזה בטאב "יש לי קוד גישה" במסך "כניסה למורשים"
+          נכנס מיידית לאתר - בלי מייל, בלי שם משתמש, בלי אישור מנהל. עדכון הקוד
+          כאן משפיע מיד על כל מי שישתמש בו מעתה.
+        </p>
+        <div class="flex gap-1">
+          <input type="text" id="guest-code-value" placeholder="קוד גישה" style="flex:1;" />
+          <button class="btn btn-primary" id="save-guest-code-btn">שמור קוד</button>
+        </div>
+      </div>
       <div class="card" style="font-size:13px; margin-bottom:14px;">
         בקשות גישת חירום מגיעות כשמשתמש לוחץ 5 שניות על הלוגו בדף הבית
         ומזין מייל. אישור כאן שולח למשתמש קישור כניסה ישיר למייל, ללא
@@ -608,6 +620,7 @@ let ME = null;
   await loadAppeals();
   await loadDmMonitor();
   await loadEmergencyRequests();
+  await loadGuestCode();
 
   document.getElementById("dm-admin-form").addEventListener("submit", async (e) => {
     e.preventDefault();
@@ -632,6 +645,8 @@ let ME = null;
   document.getElementById("user-search").addEventListener("input", (e) => renderUsers(e.target.value.trim().toLowerCase()));
 
   document.getElementById("abort-all-games-btn").addEventListener("click", abortAllGames);
+
+  document.getElementById("save-guest-code-btn").addEventListener("click", saveGuestCode);
 })();
 
 async function abortAllGames() {
@@ -978,6 +993,26 @@ function renderAttachmentAdmin(m) {
   return `<a href="${url}" target="_blank" rel="noopener" class="btn btn-ghost" style="margin-top:6px; display:inline-block; padding:6px 10px; font-size:12px;">📎 פתח קובץ</a>`;
 }
 
+
+// ---------------- קוד גישת אורח ----------------
+async function loadGuestCode() {
+  const { data, error } = await sb.rpc("admin_get_guest_code");
+  if (error) return;
+  const code = Array.isArray(data) ? data[0] : data;
+  document.getElementById("guest-code-value").value = code || "";
+}
+
+async function saveGuestCode() {
+  const input = document.getElementById("guest-code-value");
+  const code = input.value.trim();
+  if (!code) {
+    toast("יש להזין קוד גישה", "error");
+    return;
+  }
+  const { error } = await sb.rpc("admin_set_guest_code", { p_code: code });
+  if (error) return toast("שגיאה בשמירת הקוד: " + error.message, "error");
+  toast("קוד גישת האורח נשמר בהצלחה", "success");
+}
 
 // ---------------- גישת חירום ----------------
 async function loadEmergencyRequests() {

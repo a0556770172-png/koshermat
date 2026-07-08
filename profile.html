@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>פרופיל — כושרמט</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>♞</text></svg>">
-<link rel="stylesheet" href="css/style.css?v=24" />
+<link rel="stylesheet" href="css/style.css?v=25" />
 </head>
 <body>
   <nav class="navbar" id="navbar"></nav>
@@ -40,6 +40,25 @@
               <div id="avatar-options" class="flex gap-1" style="flex-wrap:wrap;"></div>
             </div>
             <button type="submit" class="btn btn-primary mt-1">שמור שינויים</button>
+          </form>
+        </div>
+
+        <div class="card" id="credentials-section" style="display:none;">
+          <div class="section-title" style="font-size:16px;">🔐 הגדרת פרטי כניסה קבועים</div>
+          <p class="muted" style="font-size:12px; margin-bottom:8px;">
+            נכנסת עם קוד גישה או גישת חירום? אפשר (לא חובה) להגדיר כאן מייל וסיסמה
+            קבועים, כדי שתוכל להתחבר איתם גם בפעם הבאה.
+          </p>
+          <form id="credentials-form" class="flex flex-col gap-1">
+            <div>
+              <label>אימייל</label>
+              <input type="email" id="credentials-email" required placeholder="you@example.com" />
+            </div>
+            <div>
+              <label>סיסמה חדשה</label>
+              <input type="password" id="credentials-password" required minlength="6" placeholder="••••••••" />
+            </div>
+            <button type="submit" class="btn btn-accent mt-1">שמור פרטי כניסה</button>
           </form>
         </div>
       </div>
@@ -568,6 +587,8 @@ const AVATAR_OPTIONS = ["♟️", "♞", "♝", "♜", "♛", "♚", "🦁", "�
   if (VIEWED.id === ME.id) {
     document.getElementById("edit-section").style.display = "block";
     wireEditForm();
+    document.getElementById("credentials-section").style.display = "block";
+    wireCredentialsForm();
   }
 })();
 
@@ -678,6 +699,70 @@ function wireEditForm() {
     VIEWED.username = newUsername;
     VIEWED.avatar_emoji = selectedAvatar;
     renderProfile();
+  });
+}
+
+
+// ==========================================================
+// הגדרת פרטי כניסה קבועים (מייל + סיסמה) - שימושי בעיקר למי שנכנס
+// דרך קוד גישת אורח או גישת חירום ועדיין אין לו מייל/סיסמה קבועים.
+// מתבצע דרך Edge Function עם מפתח שירות, כדי לעדכן את המייל מיידית
+// בלי לשלוח קישור אימות למייל החדש (כי המשתמש הזה לא אמור להיתקל
+// בשום שלב אימות נוסף גם כשהוא "משדרג" את החשבון שלו).
+// ==========================================================
+function wireCredentialsForm() {
+  const form = document.getElementById("credentials-form");
+  if (!form) return;
+
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const email = document.getElementById("credentials-email").value.trim();
+    const password = document.getElementById("credentials-password").value;
+    if (!email || password.length < 6) {
+      toast("יש להזין מייל וסיסמה (לפחות 6 תווים)", "error");
+      return;
+    }
+
+    const btn = form.querySelector("button[type=submit]");
+    btn.disabled = true;
+    btn.innerHTML = `<span class="spinner"></span> שומר...`;
+
+    try {
+      const { data: sessionData } = await sb.auth.getSession();
+      const accessToken = sessionData?.session?.access_token;
+      if (!accessToken) {
+        toast("יש להתחבר מחדש כדי לבצע פעולה זו", "error");
+        btn.disabled = false;
+        btn.textContent = "שמור פרטי כניסה";
+        return;
+      }
+
+      const { data, error } = await withRetry(() =>
+        sb.functions.invoke("set-guest-credentials", {
+          body: { email, password },
+          headers: { Authorization: `Bearer ${accessToken}` },
+        })
+      );
+
+      if (error || !data || data.error) {
+        toast("שגיאה בשמירת פרטי הכניסה: " + ((data && data.error) || (error && error.message) || "שגיאה לא ידועה"), "error");
+        btn.disabled = false;
+        btn.textContent = "שמור פרטי כניסה";
+        return;
+      }
+
+      toast("פרטי הכניסה נשמרו! מעתה אפשר להתחבר עם המייל והסיסמה האלה", "success");
+      form.reset();
+      btn.disabled = false;
+      btn.textContent = "שמור פרטי כניסה";
+    } catch (err) {
+      toast(
+        "אין תגובה מהשרת - בדוק את החיבור לאינטרנט ונסה שוב: " + (err && err.message ? err.message : String(err)),
+        "error"
+      );
+      btn.disabled = false;
+      btn.textContent = "שמור פרטי כניסה";
+    }
   });
 }
 
