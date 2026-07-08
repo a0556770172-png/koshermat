@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 <title>משחק — כושרמט</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>♞</text></svg>">
-<link rel="stylesheet" href="css/style.css?v=22" />
+<link rel="stylesheet" href="css/style.css?v=23" />
 </head>
 <body>
   <nav class="navbar" id="navbar"></nav>
@@ -30,6 +30,8 @@
 
       <!-- מרכז: הלוח -->
       <div class="board-wrap">
+        <div id="turn-banner" class="turn-banner"><span class="dot"></span><span id="turn-banner-text">טוען...</span></div>
+
         <div class="flex" style="justify-content:space-between; width:min(560px,92vw); margin-bottom:8px;">
           <div id="black-name" style="font-weight:700;"></div>
           <div class="timer" id="black-timer-wrap"><span id="black-timer">10:00</span></div>
@@ -43,6 +45,8 @@
           <div id="white-name" style="font-weight:700;"></div>
           <div class="timer" id="white-timer-wrap"><span id="white-timer">10:00</span></div>
         </div>
+
+        <div id="last-move-info" class="last-move-info"></div>
       </div>
 
       <!-- עמודה שמאלית: צ'אט -->
@@ -2247,6 +2251,10 @@ const PIECE_UNICODE = {
   bK: "♚", bQ: "♛", bR: "♜", bB: "♝", bN: "♞", bP: "♟",
 };
 
+const PIECE_NAME_HE = {
+  k: "מלך", q: "מלכה", r: "צריח", b: "רץ", n: "פרש", p: "רגלי",
+};
+
 let ME = null;
 let GAME = null;
 let MY_COLOR = null; // 'w' | 'b' | null (spectator)
@@ -2323,6 +2331,8 @@ async function loadGame() {
   renderMoveList();
   updateTimersDisplay();
   updateControlsVisibility();
+  updateTurnBanner();
+  updateLastMoveInfo();
 
   if (GAME.status !== "active") {
     showEndOverlay();
@@ -2336,6 +2346,52 @@ function orientation() {
 function renderPlayers() {
   document.getElementById("white-name").textContent = `⚪ ${GAME.white?.username || "ממתין..."} (${GAME.white?.rating ?? "-"})`;
   document.getElementById("black-name").textContent = `⚫ ${GAME.black?.username || "ממתין..."} (${GAME.black?.rating ?? "-"})`;
+}
+
+// ---------------- באנר תור + תיאור מהלך אחרון ----------------
+function updateTurnBanner() {
+  const banner = document.getElementById("turn-banner");
+  const text = document.getElementById("turn-banner-text");
+  if (!banner || !text || !GAME) return;
+
+  if (GAME.status !== "active") {
+    banner.classList.remove("my-turn");
+    text.textContent = "המשחק הסתיים";
+    return;
+  }
+
+  const turnColor = chess.turn();
+  const turnName = turnColor === "w" ? "לבן" : "שחור";
+
+  if (!MY_COLOR) {
+    text.textContent = `תור ${turnName}`;
+    banner.classList.remove("my-turn");
+    return;
+  }
+
+  if (turnColor === MY_COLOR) {
+    text.textContent = "🟢 התור שלך למהלך";
+    banner.classList.add("my-turn");
+  } else {
+    text.textContent = `⏳ ממתין למהלך של היריב (${turnName})`;
+    banner.classList.remove("my-turn");
+  }
+}
+
+function updateLastMoveInfo() {
+  const el = document.getElementById("last-move-info");
+  if (!el) return;
+  const history = chess.history({ verbose: true });
+  const last = history[history.length - 1];
+  if (!last) {
+    el.textContent = "";
+    return;
+  }
+  const moverName = last.color === "w" ? "לבן" : "שחור";
+  const pieceName = PIECE_NAME_HE[last.piece] || last.piece;
+  const captureText = last.captured ? ` ותפס ${PIECE_NAME_HE[last.captured] || last.captured}` : "";
+  const checkText = last.san.includes("#") ? " - שח-מט!" : last.san.includes("+") ? " - שח!" : "";
+  el.innerHTML = `המהלך האחרון: <b>${moverName}</b> הזיז ${pieceName} מ-${last.from} ל-${last.to}${captureText} <span class="muted">(${escapeHtml(last.san)})</span>${checkText}`;
 }
 
 // ---------------- Board rendering ----------------
@@ -2418,6 +2474,15 @@ function selectSquare(squareName) {
   const moves = chess.moves({ square: squareName, verbose: true });
   legalTargets = moves.map((m) => ({ to: m.to, captured: !!m.captured, promotion: !!m.promotion }));
   renderBoard();
+
+  if (legalTargets.length === 0) {
+    // מציגים למה אי אפשר להזיז את הכלי הזה - חשוב במיוחד כשיש שח, כדי
+    // שיהיה ברור שהחוק אוכף שרק מהלכים שמסירים את השח מותרים
+    const msg = chess.in_check()
+      ? "אין לך מהלך חוקי עם הכלי הזה - אתה בשח, וחייב להגן על המלך"
+      : "אין לכלי הזה שום מהלך חוקי כרגע (הוא כנראה נעוץ ומגן על המלך)";
+    toast(msg, "error");
+  }
 }
 
 function showPromotionModal() {
@@ -2449,6 +2514,8 @@ async function makeMove(from, to, promotion) {
   lastMoveSquares = [from, to];
   renderBoard();
   renderMoveList();
+  updateTurnBanner();
+  updateLastMoveInfo();
 
   const now = Date.now();
   const lastMoveAt = new Date(GAME.last_move_at).getTime();
@@ -2545,6 +2612,8 @@ function applyGameUpdate(newRow) {
   renderMoveList();
   renderDrawBanner();
   updateTimersDisplay();
+  updateTurnBanner();
+  updateLastMoveInfo();
 
   if (wasActive && newRow.status !== "active") {
     gameEnded = true;

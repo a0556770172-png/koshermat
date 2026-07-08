@@ -178,8 +178,55 @@ function openDM(userId, username) {
 }
 window.openDM = openDM;
 
+// ---------------- בחירת זמן משחק (משותף למשחק מהיר ולאתגרים) ----------------
+const TIME_CONTROLS = [
+  { ms: 180000, label: "3 דקות", sub: "בזק" },
+  { ms: 300000, label: "5 דקות", sub: "מהיר" },
+  { ms: 600000, label: "10 דקות", sub: "רגיל" },
+  { ms: 900000, label: "15 דקות", sub: "נינוח" },
+  { ms: 1800000, label: "30 דקות", sub: "ארוך" },
+];
+
+function openTimeControlModal(onChoose) {
+  let overlay = document.getElementById("time-control-overlay");
+  if (overlay) overlay.remove();
+
+  overlay = document.createElement("div");
+  overlay.id = "time-control-overlay";
+  overlay.className = "overlay";
+  overlay.innerHTML = `
+    <div class="card" style="max-width:380px;">
+      <div class="section-title" style="font-size:17px; margin-bottom:4px;">⏱️ בחר זמן למשחק</div>
+      <p class="muted" style="font-size:13px; margin-bottom:14px;">כל שחקן יקבל את הזמן הזה לכל המשחק</p>
+      <div class="time-control-grid">
+        ${TIME_CONTROLS.map(
+          (tc) => `<button class="time-control-btn" data-ms="${tc.ms}">
+            <span class="tc-label">${tc.label}</span>
+            <span class="tc-sub">${tc.sub}</span>
+          </button>`
+        ).join("")}
+      </div>
+      <button class="btn btn-ghost btn-block mt-2" id="time-control-cancel">ביטול</button>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  overlay.querySelectorAll(".time-control-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const ms = parseInt(btn.dataset.ms, 10);
+      overlay.remove();
+      onChoose(ms);
+    });
+  });
+  document.getElementById("time-control-cancel").addEventListener("click", () => overlay.remove());
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) overlay.remove();
+  });
+}
+window.openTimeControlModal = openTimeControlModal;
+
 // ---------------- אתגר משחק אישי (הזמנות) ----------------
-async function sendGameInvite(myId, targetId, targetName) {
+async function sendGameInvite(myId, targetId, targetName, timeControlMs) {
   if (myId === targetId) {
     toast("אי אפשר לאתגר את עצמך", "error");
     return;
@@ -197,13 +244,24 @@ async function sendGameInvite(myId, targetId, targetName) {
     return;
   }
 
-  const { error } = await sb.from("game_invites").insert({ from_user: myId, to_user: targetId });
+  const { error } = await sb.from("game_invites").insert({
+    from_user: myId,
+    to_user: targetId,
+    time_control_ms: timeControlMs || 600000,
+  });
   if (error) {
     toast("שגיאה בשליחת האתגר: " + error.message, "error");
     return;
   }
   toast(`אתגר נשלח ל${targetName}! ⚔️`, "success");
 }
+
+// עוטף את sendGameInvite בבחירת זמן משחק תחילה - זו הפונקציה שנקראת
+// מכפתורי "אתגר" בפרופיל ובטבלת הדירוג
+function challengeWithTimeControl(myId, targetId, targetName) {
+  openTimeControlModal((ms) => sendGameInvite(myId, targetId, targetName, ms));
+}
+window.challengeWithTimeControl = challengeWithTimeControl;
 
 const handledInviteUpdates = new Set();
 

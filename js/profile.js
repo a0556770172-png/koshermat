@@ -37,7 +37,7 @@ function renderProfile() {
   const challengeBtn =
     !isMe && !VIEWED.is_banned
       ? `<div class="flex gap-1 mt-2">
-          <button class="btn btn-primary btn-block" onclick="sendGameInvite('${ME.id}','${VIEWED.id}','${escapeHtml(VIEWED.username)}')">⚔️ אתגר למשחק</button>
+          <button class="btn btn-primary btn-block" onclick="challengeWithTimeControl('${ME.id}','${VIEWED.id}','${escapeHtml(VIEWED.username)}')">⚔️ אתגר למשחק</button>
           <button class="btn btn-accent btn-block" onclick="openDM('${VIEWED.id}','${escapeHtml(VIEWED.username)}')">💬 הודעה פרטית</button>
         </div>`
       : "";

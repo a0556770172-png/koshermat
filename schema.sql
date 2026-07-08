@@ -158,6 +158,7 @@ create table if not exists games (
   white_time_ms int not null default 600000,
   black_time_ms int not null default 600000,
   draw_offered_by uuid references profiles(id),
+  time_control_ms int not null default 600000,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -174,6 +175,7 @@ alter table games add column if not exists white_time_ms int not null default 60
 alter table games add column if not exists black_time_ms int not null default 600000;
 alter table games add column if not exists draw_offered_by uuid references profiles(id);
 alter table games add column if not exists updated_at timestamptz not null default now();
+alter table games add column if not exists time_control_ms int not null default 600000;
 
 alter table games enable row level security;
 
@@ -230,8 +232,11 @@ create trigger trg_games_track_move_time before update on games
 create table if not exists matchmaking_queue (
   user_id uuid primary key references profiles(id) on delete cascade,
   rating int not null,
+  time_control_ms int not null default 600000,
   joined_at timestamptz not null default now()
 );
+
+alter table matchmaking_queue add column if not exists time_control_ms int not null default 600000;
 
 alter table matchmaking_queue enable row level security;
 
@@ -253,18 +258,23 @@ declare
   opponent record;
   is_white boolean;
 begin
+  -- משדכים רק מול יריב שביקש את אותו זמן משחק, כדי שהתחרות תהיה הוגנת
   select * into opponent from matchmaking_queue
     where user_id <> new.user_id
+      and time_control_ms = new.time_control_ms
     order by abs(rating - new.rating), joined_at
     limit 1
     for update skip locked;
 
   if found then
     is_white := random() < 0.5;
-    insert into games (white_id, black_id)
+    insert into games (white_id, black_id, white_time_ms, black_time_ms, time_control_ms)
     values (
       case when is_white then new.user_id else opponent.user_id end,
-      case when is_white then opponent.user_id else new.user_id end
+      case when is_white then opponent.user_id else new.user_id end,
+      new.time_control_ms,
+      new.time_control_ms,
+      new.time_control_ms
     );
     delete from matchmaking_queue where user_id in (new.user_id, opponent.user_id);
   end if;
@@ -685,8 +695,11 @@ create table if not exists game_invites (
   to_user uuid references profiles(id) on delete cascade,
   status text not null default 'pending', -- pending | accepted | declined | cancelled
   game_id uuid references games(id),
+  time_control_ms int not null default 600000,
   created_at timestamptz not null default now()
 );
+
+alter table game_invites add column if not exists time_control_ms int not null default 600000;
 
 alter table game_invites enable row level security;
 
@@ -725,10 +738,13 @@ begin
   end if;
 
   is_white := random() < 0.5;
-  insert into games (white_id, black_id)
+  insert into games (white_id, black_id, white_time_ms, black_time_ms, time_control_ms)
   values (
     case when is_white then inv.from_user else inv.to_user end,
-    case when is_white then inv.to_user else inv.from_user end
+    case when is_white then inv.to_user else inv.from_user end,
+    inv.time_control_ms,
+    inv.time_control_ms,
+    inv.time_control_ms
   ) returning id into new_game_id;
 
   update game_invites set status = 'accepted', game_id = new_game_id where id = p_invite_id;

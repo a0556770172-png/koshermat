@@ -71,16 +71,19 @@ async function toggleSearch() {
     await sb.from("matchmaking_queue").delete().eq("user_id", ME.id);
     stopSearchingUI();
   } else {
-    const { error } = await sb.from("matchmaking_queue").upsert({
-      user_id: ME.id,
-      rating: ME.rating,
+    openTimeControlModal(async (timeControlMs) => {
+      const { error } = await sb.from("matchmaking_queue").upsert({
+        user_id: ME.id,
+        rating: ME.rating,
+        time_control_ms: timeControlMs,
+      });
+      if (error) {
+        toast("שגיאה בהצטרפות לתור: " + error.message, "error");
+        return;
+      }
+      startSearchingUI();
+      watchForMatch();
     });
-    if (error) {
-      toast("שגיאה בהצטרפות לתור: " + error.message, "error");
-      return;
-    }
-    startSearchingUI();
-    watchForMatch();
   }
 }
 
