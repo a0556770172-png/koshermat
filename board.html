@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 <title>משחק — כושרמט</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>♞</text></svg>">
-<link rel="stylesheet" href="css/style.css?v=23" />
+<link rel="stylesheet" href="css/style.css?v=28" />
 </head>
 <body>
   <nav class="navbar" id="navbar"></nav>
@@ -2255,6 +2255,68 @@ const PIECE_NAME_HE = {
   k: "מלך", q: "מלכה", r: "צריח", b: "רץ", n: "פרש", p: "רגלי",
 };
 
+// ==========================================================
+// אפקטי סאונד - נוצרים בזמן אמת עם Web Audio API (בלי קבצי אודיו
+// חיצוניים, כדי שלא תהיה שום תלות ברשת/הורדה - חשוב במיוחד ברשתות
+// עם סינון תוכן שבהן קבצים חיצוניים לפעמים נכשלים לטעון).
+// ==========================================================
+let _audioCtx = null;
+function getAudioCtx() {
+  if (!_audioCtx) {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
+    _audioCtx = new AC();
+  }
+  if (_audioCtx.state === "suspended") {
+    _audioCtx.resume().catch(() => {});
+  }
+  return _audioCtx;
+}
+
+function playTone(freq, duration = 0.15, type = "sine", delay = 0, volume = 0.18) {
+  const ctx = getAudioCtx();
+  if (!ctx) return;
+  const startAt = ctx.currentTime + delay;
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = type;
+  osc.frequency.setValueAtTime(freq, startAt);
+  gain.gain.setValueAtTime(0, startAt);
+  gain.gain.linearRampToValueAtTime(volume, startAt + 0.01);
+  gain.gain.exponentialRampToValueAtTime(0.001, startAt + duration);
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  osc.start(startAt);
+  osc.stop(startAt + duration + 0.02);
+}
+
+function playMoveSound() {
+  playTone(520, 0.09, "triangle", 0, 0.14);
+}
+
+function playCaptureSound() {
+  playTone(260, 0.12, "square", 0, 0.16);
+  playTone(180, 0.14, "square", 0.05, 0.12);
+}
+
+function playCheckSound() {
+  playTone(700, 0.1, "sawtooth", 0, 0.14);
+  playTone(880, 0.14, "sawtooth", 0.09, 0.14);
+}
+
+function playWinSound() {
+  [523, 659, 784, 1046].forEach((f, i) => playTone(f, 0.22, "triangle", i * 0.11, 0.2));
+}
+
+function playLoseSound() {
+  [392, 349, 294, 261].forEach((f, i) => playTone(f, 0.28, "sine", i * 0.13, 0.16));
+}
+
+function playDrawSound() {
+  playTone(440, 0.2, "sine", 0, 0.15);
+  playTone(440, 0.2, "sine", 0.18, 0.15);
+}
+
 let ME = null;
 let GAME = null;
 let MY_COLOR = null; // 'w' | 'b' | null (spectator)
@@ -2517,6 +2579,15 @@ async function makeMove(from, to, promotion) {
   updateTurnBanner();
   updateLastMoveInfo();
 
+  if (move.captured) {
+    playCaptureSound();
+  } else {
+    playMoveSound();
+  }
+  if (chess.in_check()) {
+    playCheckSound();
+  }
+
   const now = Date.now();
   const lastMoveAt = new Date(GAME.last_move_at).getTime();
   const elapsed = now - lastMoveAt;
@@ -2595,6 +2666,15 @@ function applyGameUpdate(newRow) {
   lastAppliedFen = newRow.fen;
   lastAppliedStatus = newRow.status;
   lastAppliedDrawOfferedBy = newRow.draw_offered_by;
+
+  // אפקטי סאונד רק כשהמהלך שהתקבל הוא של היריב (או שאנחנו צופים) - כדי
+  // לא להשמיע צליל כפול על המהלכים של עצמנו (שכבר קיבלו צליל ב-makeMove)
+  const isOpponentMoveOrSpectator = !MY_COLOR || newRow.turn === MY_COLOR;
+  if (isOpponentMoveOrSpectator && newRow.last_move && newRow.status === "active") {
+    if (newRow.last_move.includes("x")) playCaptureSound();
+    else playMoveSound();
+    if (newRow.last_move.includes("+")) playCheckSound();
+  }
 
   const wasActive = GAME.status === "active";
   Object.assign(GAME, newRow);
@@ -2800,6 +2880,14 @@ function showEndOverlay() {
 
   document.getElementById("end-title").textContent = `${emoji} ${title}`;
   document.getElementById("end-subtitle").textContent = subtitle;
+
+  if (isDraw) {
+    playDrawSound();
+  } else if (MY_COLOR && iAmWinner) {
+    playWinSound();
+  } else if (MY_COLOR) {
+    playLoseSound();
+  }
 
   if (MY_COLOR && iAmWinner) launchConfetti();
 

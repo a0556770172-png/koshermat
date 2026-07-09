@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>לובי — כושרמט</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>♞</text></svg>">
-<link rel="stylesheet" href="css/style.css?v=24" />
+<link rel="stylesheet" href="css/style.css?v=28" />
 </head>
 <body>
   <nav class="navbar" id="navbar"></nav>
@@ -13,9 +13,13 @@
   <div class="wrap page-enter">
     <div class="lobby-grid">
 
-      <!-- עמודה ימנית: פרופיל ומדליות -->
+      <!-- עמודה ימנית: פרופיל, מדליות ואתגרים יומיים -->
       <div class="flex flex-col gap-2">
         <div class="card" id="profile-card"></div>
+        <div class="card">
+          <div class="section-title" style="font-size:16px;">📋 אתגרים יומיים</div>
+          <div id="daily-challenges-list" class="flex flex-col gap-1"></div>
+        </div>
         <div class="card">
           <div class="section-title" style="font-size:16px;">🏅 מדליות</div>
           <div class="medal-grid" id="medal-grid"></div>
@@ -44,6 +48,15 @@
         <div id="dm-preview-list"></div>
       </div>
 
+    </div>
+  </div>
+
+  <div class="overlay" id="daily-reward-overlay" style="display:none;">
+    <div class="card daily-reward-card text-center">
+      <div class="daily-reward-flame">🔥</div>
+      <div class="daily-reward-title">רצף של <span id="daily-reward-streak">0</span> ימים!</div>
+      <div class="daily-reward-points">+<span id="daily-reward-points">0</span> נקודות בונוס</div>
+      <button class="btn btn-primary btn-block mt-2" id="daily-reward-close-btn">מעולה! 🎉</button>
     </div>
   </div>
 
@@ -559,6 +572,8 @@ let queueChannel = null;
   subscribeLiveGames();
   await loadDmPreview();
   subscribeDmPreview();
+  await loadDailyChallenges();
+  claimDailyReward();
 
   document.getElementById("find-btn").addEventListener("click", toggleSearch);
 })();
@@ -577,9 +592,95 @@ function renderProfileCard(p) {
       <div class="stat-row"><span>תיקו</span><b>${p.draws}</b></div>
       <div class="stat-row"><span>רצף נוכחי</span><b>${p.win_streak} 🔥</b></div>
       <div class="stat-row"><span>רצף שיא</span><b>${p.best_streak}</b></div>
+      <div class="stat-row"><span>רצף כניסה יומי</span><b>${p.current_login_streak || 0} 🔥</b></div>
     </div>
   `;
 }
+
+// ---------------- פרס כניסה יומית ----------------
+async function claimDailyReward() {
+  try {
+    const { data, error } = await sb.rpc("claim_daily_reward");
+    if (error || !data) return;
+    const result = Array.isArray(data) ? data[0] : data;
+    if (result.already_claimed) return;
+
+    document.getElementById("daily-reward-streak").textContent = result.streak;
+    document.getElementById("daily-reward-points").textContent = result.reward_points;
+    const overlay = document.getElementById("daily-reward-overlay");
+    overlay.style.display = "flex";
+
+    document.getElementById("daily-reward-close-btn").addEventListener(
+      "click",
+      () => {
+        overlay.style.display = "none";
+      },
+      { once: true }
+    );
+  } catch (err) {
+    // כשל שקט - לא קריטי אם הבונוס היומי לא נטען הפעם
+  }
+}
+
+// ---------------- אתגרים יומיים ----------------
+async function loadDailyChallenges() {
+  try {
+    const { data, error } = await sb.rpc("get_today_challenges");
+    if (error || !data) return;
+    renderDailyChallenges(data);
+  } catch (err) {
+    // כשל שקט
+  }
+}
+
+function renderDailyChallenges(challenges) {
+  const box = document.getElementById("daily-challenges-list");
+  if (!challenges || !challenges.length) {
+    box.innerHTML = `<p class="muted text-center" style="font-size:13px;">אין אתגרים היום</p>`;
+    return;
+  }
+  box.innerHTML = challenges
+    .map((c) => {
+      const pct = Math.min(100, Math.round((c.progress / c.target) * 100));
+      const done = c.progress >= c.target;
+      return `
+      <div class="challenge-card ${c.claimed ? "claimed" : ""}">
+        <div class="flex" style="justify-content:space-between; align-items:center;">
+          <b style="font-size:13px;">${escapeHtml(c.title)}</b>
+          <span class="muted" style="font-size:12px;">+${c.reward_points} 🪙</span>
+        </div>
+        <div class="muted" style="font-size:12px; margin:2px 0 6px;">${escapeHtml(c.description)}</div>
+        <div class="challenge-progress-track">
+          <div class="challenge-progress-fill" style="width:${pct}%;"></div>
+        </div>
+        <div class="flex" style="justify-content:space-between; align-items:center; margin-top:4px;">
+          <span class="muted" style="font-size:11px;">${Math.min(c.progress, c.target)}/${c.target}</span>
+          ${
+            c.claimed
+              ? `<span class="muted" style="font-size:11px;">✔️ נאסף</span>`
+              : done
+              ? `<button class="btn btn-accent" style="padding:4px 10px; font-size:11px;" onclick="claimDailyChallenge('${c.challenge_id}')">תבע פרס</button>`
+              : ``
+          }
+        </div>
+      </div>`;
+    })
+    .join("");
+}
+
+async function claimDailyChallenge(id) {
+  const { data, error } = await sb.rpc("claim_daily_challenge", { p_challenge_id: id });
+  if (error) {
+    toast("שגיאה בתביעת הפרס: " + error.message, "error");
+    return;
+  }
+  const result = Array.isArray(data) ? data[0] : data;
+  if (!result.already_claimed) {
+    toast(`קיבלת ${result.reward_points} נקודות!`, "success");
+  }
+  await loadDailyChallenges();
+}
+window.claimDailyChallenge = claimDailyChallenge;
 
 async function loadMedals(p) {
   const { data: allMedals } = await sb.from("medals").select("*").order("id");

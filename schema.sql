@@ -519,6 +519,14 @@ begin
     best_streak = greatest(best_streak, case when score_black = 1 then win_streak + 1 else 0 end)
   where id = g.black_id;
 
+  perform bump_daily_challenge_progress(g.white_id, 'games_played', 1);
+  perform bump_daily_challenge_progress(g.black_id, 'games_played', 1);
+  if score_white = 1 then
+    perform bump_daily_challenge_progress(g.white_id, 'games_won', 1);
+  elsif score_black = 1 then
+    perform bump_daily_challenge_progress(g.black_id, 'games_won', 1);
+  end if;
+
   perform award_medals(g.white_id);
   perform award_medals(g.black_id);
 
@@ -932,6 +940,200 @@ begin
     raise exception 'not authorized';
   end if;
   return (select value from app_config where key = 'guest_access_code');
+end;
+$$;
+
+-- ============================================================
+-- רצף יומי (Daily Login Streak) + פרס כניסה יומית
+-- כל כניסה ראשונה ביום (בלובי) מזכה בנקודות בונוס שעולות ככל שהרצף
+-- ארוך יותר. אם פספסת יום - הרצף מתאפס.
+-- ============================================================
+alter table profiles add column if not exists current_login_streak int not null default 0;
+alter table profiles add column if not exists longest_login_streak int not null default 0;
+alter table profiles add column if not exists last_daily_reward_date date;
+
+create or replace function claim_daily_reward()
+returns json
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  me profiles%rowtype;
+  today date := (now() at time zone 'Asia/Jerusalem')::date;
+  yesterday date := today - 1;
+  reward_points int := 0;
+  new_streak int;
+  already boolean := false;
+begin
+  select * into me from profiles where id = auth.uid() for update;
+  if not found then
+    raise exception 'not authorized';
+  end if;
+
+  if me.last_daily_reward_date = today then
+    already := true;
+    new_streak := me.current_login_streak;
+  else
+    if me.last_daily_reward_date = yesterday then
+      new_streak := me.current_login_streak + 1;
+    else
+      new_streak := 1;
+    end if;
+
+    reward_points := least(10 + (new_streak - 1) * 5, 100);
+
+    perform set_config('app.bypass_protect', 'on', true);
+    update profiles set
+      points = points + reward_points,
+      current_login_streak = new_streak,
+      longest_login_streak = greatest(longest_login_streak, new_streak),
+      last_daily_reward_date = today
+    where id = auth.uid();
+    perform set_config('app.bypass_protect', 'off', true);
+  end if;
+
+  return json_build_object(
+    'already_claimed', already,
+    'streak', new_streak,
+    'reward_points', reward_points
+  );
+end;
+$$;
+
+-- ============================================================
+-- אתגרים יומיים (Daily Challenges) - משימות קצרות שמתאפסות כל יום,
+-- כדי לתת סיבה לחזור ולשחק כל יום.
+-- ============================================================
+create table if not exists daily_challenge_defs (
+  id text primary key,
+  title text not null,
+  description text not null,
+  target int not null,
+  reward_points int not null,
+  metric text not null, -- games_played | games_won
+  sort_order int not null default 0
+);
+
+insert into daily_challenge_defs (id, title, description, target, reward_points, metric, sort_order) values
+  ('play_1_game', 'ראשון להתחיל', 'שחק משחק אחד היום', 1, 5, 'games_played', 1),
+  ('play_3_games', 'שחקן פעיל', 'שחק 3 משחקים היום', 3, 15, 'games_played', 2),
+  ('win_2_games', 'צייד ניצחונות', 'נצח 2 משחקים היום', 2, 25, 'games_won', 3)
+on conflict (id) do update set
+  title = excluded.title,
+  description = excluded.description,
+  target = excluded.target,
+  reward_points = excluded.reward_points,
+  metric = excluded.metric,
+  sort_order = excluded.sort_order;
+
+alter table daily_challenge_defs enable row level security;
+drop policy if exists "everyone can view challenge defs" on daily_challenge_defs;
+create policy "everyone can view challenge defs" on daily_challenge_defs for select using (true);
+
+create table if not exists user_daily_challenges (
+  user_id uuid not null references profiles(id) on delete cascade,
+  challenge_id text not null references daily_challenge_defs(id),
+  challenge_date date not null default (now() at time zone 'Asia/Jerusalem')::date,
+  progress int not null default 0,
+  claimed boolean not null default false,
+  primary key (user_id, challenge_id, challenge_date)
+);
+
+alter table user_daily_challenges enable row level security;
+drop policy if exists "users view own challenges" on user_daily_challenges;
+create policy "users view own challenges" on user_daily_challenges for select using (auth.uid() = user_id);
+
+-- פונקציה: מחזירה את האתגרים של היום למשתמש המחובר, ויוצרת עבורו שורות
+-- חדשות (progress=0) אם עוד לא נוצרו היום
+create or replace function get_today_challenges()
+returns table (
+  challenge_id text,
+  title text,
+  description text,
+  target int,
+  reward_points int,
+  progress int,
+  claimed boolean
+)
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  today date := (now() at time zone 'Asia/Jerusalem')::date;
+begin
+  insert into user_daily_challenges (user_id, challenge_id, challenge_date)
+  select auth.uid(), d.id, today
+  from daily_challenge_defs d
+  on conflict (user_id, challenge_id, challenge_date) do nothing;
+
+  return query
+  select d.id, d.title, d.description, d.target, d.reward_points, u.progress, u.claimed
+  from daily_challenge_defs d
+  join user_daily_challenges u on u.challenge_id = d.id and u.user_id = auth.uid() and u.challenge_date = today
+  order by d.sort_order;
+end;
+$$;
+
+-- פונקציה: תביעת פרס על אתגר יומי שהושלם
+create or replace function claim_daily_challenge(p_challenge_id text)
+returns json
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  today date := (now() at time zone 'Asia/Jerusalem')::date;
+  row_rec user_daily_challenges%rowtype;
+  def_rec daily_challenge_defs%rowtype;
+begin
+  select * into def_rec from daily_challenge_defs where id = p_challenge_id;
+  if not found then
+    raise exception 'challenge not found';
+  end if;
+
+  select * into row_rec from user_daily_challenges
+    where user_id = auth.uid() and challenge_id = p_challenge_id and challenge_date = today
+    for update;
+
+  if not found or row_rec.progress < def_rec.target then
+    raise exception 'challenge not completed yet';
+  end if;
+
+  if row_rec.claimed then
+    return json_build_object('already_claimed', true, 'reward_points', 0);
+  end if;
+
+  update user_daily_challenges set claimed = true
+    where user_id = auth.uid() and challenge_id = p_challenge_id and challenge_date = today;
+
+  perform set_config('app.bypass_protect', 'on', true);
+  update profiles set points = points + def_rec.reward_points where id = auth.uid();
+  perform set_config('app.bypass_protect', 'off', true);
+
+  return json_build_object('already_claimed', false, 'reward_points', def_rec.reward_points);
+end;
+$$;
+
+-- פונקציית עזר פנימית: מקדמת התקדמות אתגר יומי לפי מדד (games_played/games_won)
+-- למשתמש נתון, ליום הנוכחי - נקראת אוטומטית מתוך finish_game()
+create or replace function bump_daily_challenge_progress(p_user_id uuid, p_metric text, p_amount int)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  today date := (now() at time zone 'Asia/Jerusalem')::date;
+begin
+  insert into user_daily_challenges (user_id, challenge_id, challenge_date, progress)
+  select p_user_id, d.id, today, p_amount
+  from daily_challenge_defs d
+  where d.metric = p_metric
+  on conflict (user_id, challenge_id, challenge_date)
+    do update set progress = user_daily_challenges.progress + p_amount
+    where user_daily_challenges.claimed = false;
 end;
 $$;
 
