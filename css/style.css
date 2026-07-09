@@ -513,6 +513,22 @@ label { font-size: 13px; color: var(--text-dim); margin-bottom: 6px; display: bl
   touch-action: manipulation;
   transition: background-color .15s ease;
 }
+.coord-label {
+  position: absolute; font-size: 10px; font-weight: 800; pointer-events: none; opacity: .8;
+  line-height: 1;
+}
+.coord-rank { top: 3px; left: 4px; }
+.coord-file { bottom: 3px; right: 4px; }
+.square.light .coord-label { color: #8f5f30; }
+.square.dark .coord-label { color: #f0dcb4; }
+
+.captured-tray {
+  display: flex; align-items: center; gap: 1px; min-height: 20px; flex-wrap: wrap;
+}
+.captured-piece { font-size: 15px; opacity: .85; margin-left: -3px; }
+.captured-advantage {
+  font-size: 12px; font-weight: 800; color: var(--success); margin-right: 4px;
+}
 .square.light { background: linear-gradient(135deg, #f0dcb4, #e6cd9c); }
 .square.dark { background: linear-gradient(135deg, #a9773f, #8f5f30); }
 .square.selected { box-shadow: inset 0 0 0 3px var(--accent-2); }

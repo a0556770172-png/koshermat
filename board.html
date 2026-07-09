@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 <title>משחק — כושרמט</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>♞</text></svg>">
-<link rel="stylesheet" href="css/style.css?v=29" />
+<link rel="stylesheet" href="css/style.css?v=30" />
 </head>
 <body>
   <nav class="navbar" id="navbar"></nav>
@@ -33,8 +33,11 @@
         <button class="fullscreen-toggle-btn" id="fullscreen-btn" title="מסך מלא" onclick="toggleFullscreen()">⛶</button>
         <div id="turn-banner" class="turn-banner"><span class="dot"></span><span id="turn-banner-text">טוען...</span></div>
 
-        <div class="flex" style="justify-content:space-between; width:min(560px,92vw); margin-bottom:8px;">
-          <div id="black-name" style="font-weight:700;"></div>
+        <div class="flex" style="justify-content:space-between; align-items:center; width:min(560px,92vw); margin-bottom:8px;">
+          <div>
+            <div id="black-name" style="font-weight:700;"></div>
+            <div id="black-captured" class="captured-tray"></div>
+          </div>
           <div class="timer" id="black-timer-wrap"><span id="black-timer">10:00</span></div>
         </div>
 
@@ -42,8 +45,11 @@
 
         <div class="board" id="board"></div>
 
-        <div class="flex" style="justify-content:space-between; width:min(560px,92vw); margin-top:8px;">
-          <div id="white-name" style="font-weight:700;"></div>
+        <div class="flex" style="justify-content:space-between; align-items:center; width:min(560px,92vw); margin-top:8px;">
+          <div>
+            <div id="white-name" style="font-weight:700;"></div>
+            <div id="white-captured" class="captured-tray"></div>
+          </div>
           <div class="timer" id="white-timer-wrap"><span id="white-timer">10:00</span></div>
         </div>
 
@@ -2429,6 +2435,7 @@ async function loadGame() {
   renderPlayers();
   renderBoard();
   renderMoveList();
+  renderCapturedPieces();
   updateTimersDisplay();
   updateControlsVisibility();
   updateTurnBanner();
@@ -2523,6 +2530,19 @@ function renderBoard() {
         sq.classList.add("in-check");
       }
 
+      if (displayCol === 0) {
+        const rankLabel = document.createElement("span");
+        rankLabel.className = "coord-label coord-rank";
+        rankLabel.textContent = rank;
+        sq.appendChild(rankLabel);
+      }
+      if (displayRow === 7) {
+        const fileLabel = document.createElement("span");
+        fileLabel.className = "coord-label coord-file";
+        fileLabel.textContent = file;
+        sq.appendChild(fileLabel);
+      }
+
       if (piece) {
         const span = document.createElement("span");
         span.className = "piece";
@@ -2614,6 +2634,7 @@ async function makeMove(from, to, promotion) {
   lastMoveSquares = [from, to];
   renderBoard();
   renderMoveList();
+  renderCapturedPieces();
   updateTurnBanner();
   updateLastMoveInfo();
 
@@ -2658,6 +2679,7 @@ async function makeMove(from, to, promotion) {
     lastMoveSquares = previousLastMoveSquares;
     renderBoard();
     renderMoveList();
+    renderCapturedPieces();
     const msg = error
       ? (error.message || error.details || JSON.stringify(error))
       : "0 שורות עודכנו - כנראה שאין לך הרשאה (RLS) לעדכן את המשחק הזה";
@@ -2728,6 +2750,7 @@ function applyGameUpdate(newRow) {
   legalTargets = [];
   renderBoard();
   renderMoveList();
+  renderCapturedPieces();
   renderDrawBanner();
   updateTimersDisplay();
   updateTurnBanner();
@@ -2771,6 +2794,44 @@ function renderMoveList() {
   document.getElementById("move-list").innerHTML = html || `<span class="muted">טרם בוצעו מהלכים</span>`;
   const list = document.getElementById("move-list");
   list.scrollTop = list.scrollHeight;
+}
+
+// ---------------- כלים שנאכלו + יתרון חומרי ----------------
+const PIECE_VALUE = { p: 1, n: 3, b: 3, r: 5, q: 9 };
+
+function renderCapturedPieces() {
+  const verboseHistory = chess.history({ verbose: true });
+  const capturedByWhite = []; // כלים שחורים שהלבן אכל
+  const capturedByBlack = []; // כלים לבנים שהשחור אכל
+
+  verboseHistory.forEach((m) => {
+    if (!m.captured) return;
+    if (m.color === "w") capturedByWhite.push(m.captured);
+    else capturedByBlack.push(m.captured);
+  });
+
+  const sortByValue = (arr) => arr.slice().sort((a, b) => (PIECE_VALUE[b] || 0) - (PIECE_VALUE[a] || 0));
+  const sumValue = (arr) => arr.reduce((sum, t) => sum + (PIECE_VALUE[t] || 0), 0);
+
+  const whiteValue = sumValue(capturedByWhite);
+  const blackValue = sumValue(capturedByBlack);
+  const advantage = whiteValue - blackValue;
+
+  const piecesHtml = (arr, color) =>
+    sortByValue(arr)
+      .map((t) => `<span class="captured-piece">${PIECE_UNICODE[color + t.toUpperCase()]}</span>`)
+      .join("");
+
+  const whiteEl = document.getElementById("white-captured");
+  const blackEl = document.getElementById("black-captured");
+  if (whiteEl) {
+    whiteEl.innerHTML =
+      piecesHtml(capturedByWhite, "b") + (advantage > 0 ? `<span class="captured-advantage">+${advantage}</span>` : "");
+  }
+  if (blackEl) {
+    blackEl.innerHTML =
+      piecesHtml(capturedByBlack, "w") + (advantage < 0 ? `<span class="captured-advantage">+${-advantage}</span>` : "");
+  }
 }
 
 // ---------------- Timers ----------------
