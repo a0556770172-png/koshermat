@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 <title>משחק — כושרמט</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>♞</text></svg>">
-<link rel="stylesheet" href="css/style.css?v=28" />
+<link rel="stylesheet" href="css/style.css?v=29" />
 </head>
 <body>
   <nav class="navbar" id="navbar"></nav>
@@ -29,7 +29,8 @@
       </div>
 
       <!-- מרכז: הלוח -->
-      <div class="board-wrap">
+      <div class="board-wrap" id="board-wrap">
+        <button class="fullscreen-toggle-btn" id="fullscreen-btn" title="מסך מלא" onclick="toggleFullscreen()">⛶</button>
         <div id="turn-banner" class="turn-banner"><span class="dot"></span><span id="turn-banner-text">טוען...</span></div>
 
         <div class="flex" style="justify-content:space-between; width:min(560px,92vw); margin-bottom:8px;">
@@ -2316,6 +2317,43 @@ function playDrawSound() {
   playTone(440, 0.2, "sine", 0, 0.15);
   playTone(440, 0.2, "sine", 0.18, 0.15);
 }
+
+// ==========================================================
+// מסך מלא ללוח המשחק - שימושי בעיקר בנייד, כדי למקד את המשחק בלי
+// הסחות דעת. משתמש ב-Fullscreen API הסטנדרטי + fallback ל-webkit
+// (חלק מהדפדפנים הישנים/ניידים). אם הדפדפן לא תומך בכלל - מציגים
+// הודעה ברורה במקום כפתור ששובר.
+// ==========================================================
+function isFullscreenActive() {
+  return !!(document.fullscreenElement || document.webkitFullscreenElement);
+}
+
+function toggleFullscreen() {
+  const el = document.getElementById("board-wrap");
+  if (!el) return;
+
+  if (!isFullscreenActive()) {
+    const req = el.requestFullscreen || el.webkitRequestFullscreen;
+    if (!req) {
+      toast("מסך מלא לא נתמך בדפדפן הזה", "error");
+      return;
+    }
+    req.call(el).catch(() => toast("לא ניתן היה לעבור למסך מלא", "error"));
+  } else {
+    const exit = document.exitFullscreen || document.webkitExitFullscreen;
+    if (exit) exit.call(document);
+  }
+}
+window.toggleFullscreen = toggleFullscreen;
+
+function updateFullscreenBtn() {
+  const btn = document.getElementById("fullscreen-btn");
+  if (!btn) return;
+  btn.textContent = isFullscreenActive() ? "✕" : "⛶";
+  btn.title = isFullscreenActive() ? "יציאה ממסך מלא" : "מסך מלא";
+}
+document.addEventListener("fullscreenchange", updateFullscreenBtn);
+document.addEventListener("webkitfullscreenchange", updateFullscreenBtn);
 
 let ME = null;
 let GAME = null;
