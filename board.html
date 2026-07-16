@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 <title>משחק — כושרמט</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>♞</text></svg>">
-<link rel="stylesheet" href="css/style.css?v=34" />
+<link rel="stylesheet" href="css/style.css?v=35" />
 </head>
 <body>
   <nav class="navbar" id="navbar"></nav>
@@ -2253,8 +2253,14 @@ function escapeHtml(str) {
 // לוגיקת עמוד המשחק: לוח שחמט, חוקים, זמן, צ'אט, סיום משחק
 // ==========================================================
 
+// חשוב: משתמשים באותה צורת סמל "מלא" (סימני היוניקוד ה"שחורים") גם
+// עבור הכלים הלבנים - כי סימני היוניקוד ה"לבנים" (♔♕♖...) הם קווי-מתאר
+// חלולים בעיצוב הגופן עצמו, ולא משנה איזה צבע CSS נותנים להם הם תמיד
+// ייראו "חלולים" באמצע במקום כלי מלא ואחיד. כשמשתמשים באותה צורה מלאה
+// לשני הצבעים, וצובעים רק דרך CSS (piece-white/piece-black), מקבלים
+// כלים אחידים ומלאים לגמרי - בדיוק כמו בסט שחמט אמיתי.
 const PIECE_UNICODE = {
-  wK: "♔", wQ: "♕", wR: "♖", wB: "♗", wN: "♘", wP: "♙",
+  wK: "♚", wQ: "♛", wR: "♜", wB: "♝", wN: "♞", wP: "♟",
   bK: "♚", bQ: "♛", bR: "♜", bB: "♝", bN: "♞", bP: "♟",
 };
 
