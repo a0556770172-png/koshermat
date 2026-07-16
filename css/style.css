@@ -555,7 +555,19 @@ label { font-size: 13px; color: var(--text-dim); margin-bottom: 6px; display: bl
 }
 .piece {
   transition: transform .18s ease;
-  filter: drop-shadow(0 3px 3px rgba(0,0,0,.45)) drop-shadow(0 0 1px rgba(0,0,0,.6));
+  filter: drop-shadow(0 3px 3px rgba(0,0,0,.45));
+}
+/* צבע אמיתי וברור לכלים לבנים מול שחורים - כדי שאף פעם לא יהיה ספק
+   מי שייך למי, גם על משבצת בהירה וגם על משבצת כהה */
+.piece-white {
+  color: #fbfbf7;
+  -webkit-text-stroke: 1.5px #232323;
+  text-stroke: 1.5px #232323;
+}
+.piece-black {
+  color: #16130f;
+  -webkit-text-stroke: 1px #d8d0c0;
+  text-stroke: 1px #d8d0c0;
 }
 .square:hover .piece { transform: scale(1.08); }
 .piece.moving { animation: pieceDrop .28s ease; }

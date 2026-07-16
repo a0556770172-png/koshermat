@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 <title>משחק — כושרמט</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>♞</text></svg>">
-<link rel="stylesheet" href="css/style.css?v=32" />
+<link rel="stylesheet" href="css/style.css?v=33" />
 </head>
 <body>
   <nav class="navbar" id="navbar"></nav>
@@ -2558,7 +2558,7 @@ function renderBoard() {
 
       if (piece) {
         const span = document.createElement("span");
-        span.className = "piece";
+        span.className = "piece " + (piece.color === "w" ? "piece-white" : "piece-black");
         span.textContent = PIECE_UNICODE[piece.color + piece.type.toUpperCase()];
         sq.appendChild(span);
       }
@@ -2625,7 +2625,7 @@ function showPromotionModal() {
   const options = ["q", "r", "b", "n"];
   const wrap = document.getElementById("promo-choices");
   wrap.innerHTML = options
-    .map((p) => `<button data-p="${p}">${PIECE_UNICODE[color + p.toUpperCase()]}</button>`)
+    .map((p) => `<button data-p="${p}" class="${color === "w" ? "piece-white" : "piece-black"}">${PIECE_UNICODE[color + p.toUpperCase()]}</button>`)
     .join("");
   wrap.querySelectorAll("button").forEach((btn) => {
     btn.onclick = () => {
@@ -3025,7 +3025,7 @@ function renderCapturedPieces() {
 
   const piecesHtml = (arr, color) =>
     sortByValue(arr)
-      .map((t) => `<span class="captured-piece">${PIECE_UNICODE[color + t.toUpperCase()]}</span>`)
+      .map((t) => `<span class="captured-piece ${color === "w" ? "piece-white" : "piece-black"}">${PIECE_UNICODE[color + t.toUpperCase()]}</span>`)
       .join("");
 
   const whiteEl = document.getElementById("white-captured");
