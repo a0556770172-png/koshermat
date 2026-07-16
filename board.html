@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 <title>משחק — כושרמט</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>♞</text></svg>">
-<link rel="stylesheet" href="css/style.css?v=31" />
+<link rel="stylesheet" href="css/style.css?v=32" />
 </head>
 <body>
   <nav class="navbar" id="navbar"></nav>
@@ -2789,16 +2789,29 @@ async function initAiGame(config) {
   updateLastMoveInfo();
   startTimerLoop();
 
-  initStockfish();
+  await initStockfish();
 
   if (MY_COLOR === "b") {
     requestAiMove();
   }
 }
 
-function initStockfish() {
+// טוענים את קובץ המנוע כטקסט (fetch) ועוטפים אותו כ-Blob מקומי לפני
+// יצירת ה-Worker - כי דפדפנים חוסמים יצירת Worker ישירות מכתובת של
+// אתר אחר (CDN) מטעמי אבטחה (same-origin policy ל-Worker scripts).
+// עוטפים ב-Blob "מרמים" את הדפדפן שהסקריפט מגיע מהאתר שלנו עצמו.
+// משתמשים בגרסת stockfish.js הקלאסית (asm.js, לא WASM) - קובץ יחיד
+// עצמאי לגמרי בלי קבצי .wasm נלווים, כדי שהעטיפה ב-Blob לא תשבור
+// טעינות יחסיות פנימיות של קבצים נוספים.
+async function initStockfish() {
+  const engineUrl = "https://cdnjs.cloudflare.com/ajax/libs/stockfish.js/10.0.2/stockfish.js";
   try {
-    AI_WORKER = new Worker("https://cdn.jsdelivr.net/npm/stockfish@16.1.0/src/stockfish-nnue-16-single.js#stockfish.wasm");
+    const resp = await fetch(engineUrl);
+    if (!resp.ok) throw new Error("HTTP " + resp.status);
+    const code = await resp.text();
+    const blob = new Blob([code], { type: "application/javascript" });
+    const blobUrl = URL.createObjectURL(blob);
+    AI_WORKER = new Worker(blobUrl);
   } catch (e) {
     toast("מנוע השחמט לא נטען - בדוק את החיבור לאינטרנט ונסה לרענן את הדף", "error");
     return;
@@ -2814,7 +2827,7 @@ function initStockfish() {
     }
   };
   AI_WORKER.onerror = () => {
-    toast("שגיאה בטעינת מנוע השחמט - בדוק את החיבור לאינטרנט ונסה שוב", "error");
+    toast("שגיאה בהרצת מנוע השחמט - נסה לרענן את הדף", "error");
   };
   AI_WORKER.postMessage("uci");
 }
