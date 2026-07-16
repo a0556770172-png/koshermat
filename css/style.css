@@ -814,3 +814,20 @@ table.lb td:first-child { font-weight: 800; color: var(--gold); }
   border: 3px solid rgba(212,175,55,.2); border-top-color: #D4AF37;
   animation: spin .8s linear infinite;
 }
+
+/* בר בחירת ערכת רקע ללוח התלת-ממדי */
+.board3d-theme-bar {
+  position: absolute; top: 10px; left: 10px; z-index: 9;
+  display: flex; gap: 6px;
+}
+.board3d-theme-btn {
+  width: 34px; height: 34px; border-radius: 50%;
+  background: rgba(10,8,6,.55); border: 1px solid rgba(212,175,55,.35);
+  font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+  transition: transform .15s, border-color .15s, background .15s;
+}
+.board3d-theme-btn:hover { transform: scale(1.1); background: rgba(10,8,6,.75); }
+.board3d-theme-btn.active {
+  border-color: #D4AF37; box-shadow: 0 0 10px rgba(212,175,55,.6);
+  background: rgba(212,175,55,.25);
+}

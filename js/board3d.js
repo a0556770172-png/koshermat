@@ -40,6 +40,15 @@ const Board3D = (function () {
   let activeTweens = [];
   let resizeHandler = null;
 
+  // רקעים / חלקיקים
+  let backdropGroup = null;
+  let currentTheme = "library";
+  let flickerLight = null;
+  let starfieldPoints = null;
+  let snowPoints = null;
+  let ambientParticles = null;
+  let captureBursts = [];
+
   const FILES = "abcdefgh";
   const SQUARE_SIZE = 1.0;
 
@@ -105,6 +114,36 @@ const Board3D = (function () {
     return tex;
   }
 
+  function makeGradientTexture(topColor, bottomColor, w, h) {
+    w = w || 8;
+    h = h || 256;
+    const c = document.createElement("canvas");
+    c.width = w;
+    c.height = h;
+    const ctx = c.getContext("2d");
+    const grad = ctx.createLinearGradient(0, 0, 0, h);
+    grad.addColorStop(0, topColor);
+    grad.addColorStop(1, bottomColor);
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, w, h);
+    const tex = new THREE.CanvasTexture(c);
+    return tex;
+  }
+
+  function makeSoftDotTexture(color) {
+    const size = 64;
+    const c = document.createElement("canvas");
+    c.width = size;
+    c.height = size;
+    const ctx = c.getContext("2d");
+    const grad = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+    grad.addColorStop(0, color);
+    grad.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, size, size);
+    return new THREE.CanvasTexture(c);
+  }
+
   // ---------------- חומרים משותפים ----------------
   let MAT = null;
   function buildMaterials() {
@@ -127,27 +166,37 @@ const Board3D = (function () {
       }),
       gold: new THREE.MeshStandardMaterial({ color: 0xd4af37, roughness: 0.28, metalness: 1 }),
       wood: new THREE.MeshStandardMaterial({ color: 0x3b2415, roughness: 0.6, metalness: 0.05 }),
+      // ניגוד מקסימלי בין לבן לשחור: לבן = שנהב בהיר חם + זהב בוהק.
+      // שחור = שחור עמוק כמעט טהור (לא אפרפר) + כסף/פלטינה קריר - שתי משפחות
+      // צבע שונות לגמרי (חם/זהוב מול קריר/כסוף) כדי שאף פעם לא יהיה ספק מי שייך למי.
       whitePiece: new THREE.MeshPhysicalMaterial({
-        color: 0xf5f1e6,
-        roughness: 0.3,
-        metalness: 0.05,
+        color: 0xfaf6ea,
+        roughness: 0.28,
+        metalness: 0.04,
         clearcoat: 0.5,
         clearcoatRoughness: 0.2,
       }),
       blackPiece: new THREE.MeshPhysicalMaterial({
-        color: 0x141414,
-        roughness: 0.15,
-        metalness: 0.1,
-        clearcoat: 0.65,
-        clearcoatRoughness: 0.1,
+        color: 0x0a0a0a,
+        roughness: 0.24,
+        metalness: 0.06,
+        clearcoat: 0.5,
+        clearcoatRoughness: 0.18,
       }),
-      goldAccent: new THREE.MeshStandardMaterial({ color: 0xd4af37, roughness: 0.25, metalness: 1 }),
-      darkGoldAccent: new THREE.MeshStandardMaterial({ color: 0x8a6d2f, roughness: 0.35, metalness: 0.9 }),
-      kingGlow: new THREE.MeshStandardMaterial({
-        color: 0xd4af37,
+      goldAccent: new THREE.MeshStandardMaterial({ color: 0xe0bb4a, roughness: 0.25, metalness: 1 }),
+      silverAccent: new THREE.MeshStandardMaterial({ color: 0xd6d6d6, roughness: 0.28, metalness: 1 }),
+      kingGlowWhite: new THREE.MeshStandardMaterial({
+        color: 0xe0bb4a,
         emissive: 0xd4af37,
-        emissiveIntensity: 0.35,
-        roughness: 0.25,
+        emissiveIntensity: 0.4,
+        roughness: 0.22,
+        metalness: 1,
+      }),
+      kingGlowBlack: new THREE.MeshStandardMaterial({
+        color: 0xd6d6d6,
+        emissive: 0x9fd6ff,
+        emissiveIntensity: 0.4,
+        roughness: 0.22,
         metalness: 1,
       }),
     };
@@ -157,7 +206,10 @@ const Board3D = (function () {
     return color === "w" ? MAT.whitePiece : MAT.blackPiece;
   }
   function pieceAccentMat(color) {
-    return color === "w" ? MAT.goldAccent : MAT.darkGoldAccent;
+    return color === "w" ? MAT.goldAccent : MAT.silverAccent;
+  }
+  function pieceKingGlowMat(color) {
+    return color === "w" ? MAT.kingGlowWhite : MAT.kingGlowBlack;
   }
 
   // ---------------- בניית הלוח ----------------
@@ -242,6 +294,271 @@ const Board3D = (function () {
     });
 
     scene.add(boardGroup);
+  }
+
+  // ---------------- רקעים נושאיים (ספרייה/ארמון/חלל/הרי שלג) ----------------
+  function clearBackdrop() {
+    if (backdropGroup) {
+      scene.remove(backdropGroup);
+      backdropGroup = null;
+    }
+    scene.fog = null;
+    flickerLight = null;
+    starfieldPoints = null;
+    snowPoints = null;
+  }
+
+  function buildBackdropLibrary() {
+    backdropGroup = new THREE.Group();
+    scene.background = new THREE.Color(0x1a120b);
+    scene.fog = new THREE.Fog(0x1a120b, 10, 24);
+    const wallTex = makeGradientTexture("#3c2a18", "#0d0904", 8, 256);
+    const wall = new THREE.Mesh(new THREE.PlaneGeometry(26, 14), new THREE.MeshBasicMaterial({ map: wallTex }));
+    wall.position.set(0, 5, -8);
+    backdropGroup.add(wall);
+    const bookColors = [0x7a2e2e, 0x2e4a7a, 0x3c5e3c, 0x7a5a2e, 0x5a2e7a, 0x2e6e6e];
+    for (let row = 0; row < 3; row++) {
+      for (let i = 0; i < 14; i++) {
+        const w = 0.18 + Math.random() * 0.12,
+          h = 0.55 + Math.random() * 0.25;
+        const book = new THREE.Mesh(
+          new THREE.BoxGeometry(w, h, 0.32),
+          new THREE.MeshStandardMaterial({
+            color: bookColors[Math.floor(Math.random() * bookColors.length)],
+            roughness: 0.75,
+          })
+        );
+        book.position.set(-6.5 + i * 1.0, 1.2 + row * 1.7, -7.4);
+        backdropGroup.add(book);
+      }
+    }
+    flickerLight = new THREE.PointLight(0xffa040, 1.3, 12, 2);
+    flickerLight.position.set(-3.5, 1.4, -3);
+    backdropGroup.add(flickerLight);
+    scene.add(backdropGroup);
+  }
+
+  function buildBackdropPalace() {
+    backdropGroup = new THREE.Group();
+    scene.background = new THREE.Color(0xede6d6);
+    scene.fog = new THREE.Fog(0xede6d6, 12, 30);
+    const wallTex = makeGradientTexture("#fff8ea", "#e4d9bd", 8, 256);
+    const wall = new THREE.Mesh(new THREE.PlaneGeometry(30, 16), new THREE.MeshBasicMaterial({ map: wallTex }));
+    wall.position.set(0, 6, -9);
+    backdropGroup.add(wall);
+    const colMat = new THREE.MeshStandardMaterial({ color: 0xf2ede0, roughness: 0.4, metalness: 0.05 });
+    [-6.5, -3.5, 3.5, 6.5].forEach((x) => {
+      const col = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.4, 7, 20), colMat);
+      col.position.set(x, 2.5, -7.5);
+      col.castShadow = true;
+      backdropGroup.add(col);
+      const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.55, 0.3, 20), MAT.gold);
+      cap.position.set(x, 6.1, -7.5);
+      backdropGroup.add(cap);
+    });
+    scene.add(backdropGroup);
+  }
+
+  function buildBackdropSpace() {
+    backdropGroup = new THREE.Group();
+    scene.background = new THREE.Color(0x02040a);
+    const nebulaCanvas = document.createElement("canvas");
+    nebulaCanvas.width = 512;
+    nebulaCanvas.height = 256;
+    const ctx = nebulaCanvas.getContext("2d");
+    ctx.fillStyle = "#02040a";
+    ctx.fillRect(0, 0, 512, 256);
+    const blobColors = ["rgba(90,60,160,0.35)", "rgba(40,90,160,0.3)", "rgba(160,60,120,0.25)"];
+    for (let i = 0; i < 18; i++) {
+      const g = ctx.createRadialGradient(0, 0, 0, 0, 0, 60 + Math.random() * 60);
+      g.addColorStop(0, blobColors[i % blobColors.length]);
+      g.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.save();
+      ctx.translate(Math.random() * 512, Math.random() * 256);
+      ctx.fillStyle = g;
+      ctx.fillRect(-150, -150, 300, 300);
+      ctx.restore();
+    }
+    const nebulaTex = new THREE.CanvasTexture(nebulaCanvas);
+    const sky = new THREE.Mesh(
+      new THREE.SphereGeometry(40, 24, 16),
+      new THREE.MeshBasicMaterial({ map: nebulaTex, side: THREE.BackSide })
+    );
+    backdropGroup.add(sky);
+    const starCount = 500;
+    const positions = new Float32Array(starCount * 3);
+    for (let i = 0; i < starCount; i++) {
+      const r = 30 + Math.random() * 8;
+      const theta = Math.random() * Math.PI * 2,
+        phi = Math.acos(2 * Math.random() - 1);
+      positions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+      positions[i * 3 + 1] = Math.abs(r * Math.cos(phi)) * 0.6 + 2;
+      positions[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta);
+    }
+    const starGeo = new THREE.BufferGeometry();
+    starGeo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    const starMat = new THREE.PointsMaterial({
+      color: 0xffffff,
+      size: 0.14,
+      transparent: true,
+      opacity: 0.85,
+      map: makeSoftDotTexture("rgba(255,255,255,1)"),
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    });
+    starfieldPoints = new THREE.Points(starGeo, starMat);
+    backdropGroup.add(starfieldPoints);
+    scene.add(backdropGroup);
+  }
+
+  function buildBackdropMountain() {
+    backdropGroup = new THREE.Group();
+    scene.background = new THREE.Color(0xcfe0e8);
+    scene.fog = new THREE.Fog(0xcfe0e8, 8, 24);
+    const wallTex = makeGradientTexture("#e8f2f6", "#a9c4d2", 8, 256);
+    const wall = new THREE.Mesh(new THREE.PlaneGeometry(30, 16), new THREE.MeshBasicMaterial({ map: wallTex }));
+    wall.position.set(0, 5, -9);
+    backdropGroup.add(wall);
+    const peakMat = new THREE.MeshStandardMaterial({ color: 0xe9f2f5, roughness: 0.9 });
+    const farPeakMat = new THREE.MeshStandardMaterial({ color: 0xb9cdd6, roughness: 0.9 });
+    [
+      [-5, 3, -8, farPeakMat],
+      [0, 4, -8.5, peakMat],
+      [5, 3.2, -8, farPeakMat],
+      [-2, 2.6, -7.6, peakMat],
+    ].forEach(([x, h, z, mat]) => {
+      const peak = new THREE.Mesh(new THREE.ConeGeometry(2.2, h, 4), mat);
+      peak.position.set(x, h / 2 - 0.3, z);
+      peak.rotation.y = Math.PI / 4;
+      backdropGroup.add(peak);
+    });
+    const snowCount = 220;
+    const positions = new Float32Array(snowCount * 3);
+    for (let i = 0; i < snowCount; i++) {
+      positions[i * 3] = (Math.random() - 0.5) * 14;
+      positions[i * 3 + 1] = Math.random() * 8;
+      positions[i * 3 + 2] = (Math.random() - 0.5) * 10 - 1;
+    }
+    const snowGeo = new THREE.BufferGeometry();
+    snowGeo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    const snowMat = new THREE.PointsMaterial({
+      color: 0xffffff,
+      size: 0.06,
+      transparent: true,
+      opacity: 0.9,
+      map: makeSoftDotTexture("rgba(255,255,255,1)"),
+      depthWrite: false,
+    });
+    snowPoints = new THREE.Points(snowGeo, snowMat);
+    backdropGroup.add(snowPoints);
+    scene.add(backdropGroup);
+  }
+
+  function setTheme(name) {
+    currentTheme = name || "library";
+    if (!scene) return;
+    clearBackdrop();
+    if (currentTheme === "palace") buildBackdropPalace();
+    else if (currentTheme === "space") buildBackdropSpace();
+    else if (currentTheme === "mountain") buildBackdropMountain();
+    else buildBackdropLibrary();
+  }
+
+  // ---------------- חלקיקים: אבק/ניצוצות תמידיים + התפוצצות באכילה ----------------
+  function buildAmbientParticles() {
+    const count = 36;
+    const positions = new Float32Array(count * 3);
+    for (let i = 0; i < count; i++) {
+      positions[i * 3] = (Math.random() - 0.5) * 7;
+      positions[i * 3 + 1] = 0.3 + Math.random() * 3;
+      positions[i * 3 + 2] = (Math.random() - 0.5) * 7;
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    const mat = new THREE.PointsMaterial({
+      color: 0xd4af37,
+      size: 0.045,
+      transparent: true,
+      opacity: 0.55,
+      map: makeSoftDotTexture("rgba(255,235,180,1)"),
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    });
+    ambientParticles = new THREE.Points(geo, mat);
+    ambientParticles.userData.baseY = positions.slice();
+    scene.add(ambientParticles);
+  }
+
+  function spawnCaptureBurst(square, flip) {
+    if (!scene) return;
+    const pos = squareToWorld(square, flip);
+    const count = 16;
+    const positions = new Float32Array(count * 3);
+    const velocities = [];
+    for (let i = 0; i < count; i++) {
+      positions[i * 3] = pos.x;
+      positions[i * 3 + 1] = 0.3;
+      positions[i * 3 + 2] = pos.z;
+      const ang = Math.random() * Math.PI * 2,
+        speed = 0.6 + Math.random() * 0.9;
+      velocities.push(new THREE.Vector3(Math.cos(ang) * speed, 1 + Math.random() * 1.5, Math.sin(ang) * speed));
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    const mat = new THREE.PointsMaterial({
+      color: 0xd32f2f,
+      size: 0.075,
+      transparent: true,
+      opacity: 0.9,
+      map: makeSoftDotTexture("rgba(255,180,140,1)"),
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    });
+    const points = new THREE.Points(geo, mat);
+    scene.add(points);
+    captureBursts.push({ points, velocities, elapsed: 0, duration: 550 });
+  }
+
+  function updateParticleSystems(dt, t) {
+    if (flickerLight) {
+      flickerLight.intensity = 1.1 + Math.sin(t * 7) * 0.15 + Math.sin(t * 13) * 0.08;
+    }
+    if (starfieldPoints) starfieldPoints.rotation.y += dt * 0.01;
+    if (snowPoints) {
+      const posAttr = snowPoints.geometry.attributes.position;
+      for (let i = 0; i < posAttr.count; i++) {
+        posAttr.array[i * 3 + 1] -= dt * 0.6;
+        if (posAttr.array[i * 3 + 1] < -0.5) posAttr.array[i * 3 + 1] = 8;
+      }
+      posAttr.needsUpdate = true;
+    }
+    if (ambientParticles) {
+      ambientParticles.rotation.y += dt * 0.03;
+      const posAttr = ambientParticles.geometry.attributes.position;
+      const base = ambientParticles.userData.baseY;
+      for (let i = 0; i < posAttr.count; i++) {
+        posAttr.array[i * 3 + 1] = base[i * 3 + 1] + Math.sin(t * 0.6 + i) * 0.15;
+      }
+      posAttr.needsUpdate = true;
+    }
+    for (let i = captureBursts.length - 1; i >= 0; i--) {
+      const b = captureBursts[i];
+      b.elapsed += dt * 1000;
+      const bt = b.elapsed / b.duration;
+      const posAttr = b.points.geometry.attributes.position;
+      for (let j = 0; j < b.velocities.length; j++) {
+        b.velocities[j].y -= 2.5 * dt;
+        posAttr.array[j * 3] += b.velocities[j].x * dt;
+        posAttr.array[j * 3 + 1] += b.velocities[j].y * dt;
+        posAttr.array[j * 3 + 2] += b.velocities[j].z * dt;
+      }
+      posAttr.needsUpdate = true;
+      b.points.material.opacity = Math.max(0, 0.9 * (1 - bt));
+      if (bt >= 1) {
+        scene.remove(b.points);
+        captureBursts.splice(i, 1);
+      }
+    }
   }
 
   // ---------------- בניית כלים (גיאומטריה מסוגננת ברמת פרימיום) ----------------
@@ -361,15 +678,15 @@ const Board3D = (function () {
       group.add(jewelBand);
       for (let i = 0; i < 6; i++) {
         const ang = (i / 6) * Math.PI * 2;
-        const jewel = new THREE.Mesh(new THREE.SphereGeometry(0.028, 10, 10), MAT.kingGlow);
+        const jewel = new THREE.Mesh(new THREE.SphereGeometry(0.028, 10, 10), pieceKingGlowMat(color));
         jewel.position.set(Math.cos(ang) * 0.2, 0.62, Math.sin(ang) * 0.2);
         group.add(jewel);
       }
       sph(0.1, 0.7, body, 16);
-      const crossV = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.22, 0.04), MAT.kingGlow);
+      const crossV = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.22, 0.04), pieceKingGlowMat(color));
       crossV.position.y = 0.86;
       group.add(crossV);
-      const crossH = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.04, 0.04), MAT.kingGlow);
+      const crossH = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.04, 0.04), pieceKingGlowMat(color));
       crossH.position.y = 0.82;
       group.add(crossH);
     }
@@ -407,9 +724,9 @@ const Board3D = (function () {
     c.addPass(new THREE.RenderPass(scene, camera));
     const bloom = new THREE.UnrealBloomPass(
       new THREE.Vector2(containerEl.clientWidth, containerEl.clientHeight),
-      0.55,
+      0.5,
       0.4,
-      0.82
+      0.88
     );
     c.addPass(bloom);
     return c;
@@ -438,6 +755,8 @@ const Board3D = (function () {
     buildMaterials();
     buildLights();
     buildBoard();
+    buildAmbientParticles();
+    setTheme(currentTheme);
 
     if (THREE.OrbitControls) {
       controls = new THREE.OrbitControls(camera, renderer.domElement);
@@ -571,6 +890,7 @@ const Board3D = (function () {
     const g = pieceGroups[square];
     if (!g) return;
     delete pieceGroups[square];
+    spawnCaptureBurst(square, currentFlip);
     addTween(g.scale, "x", g.scale.x, 0.001, 260, () => scene.remove(g));
     addTween(g.scale, "y", g.scale.y, 0.001, 260);
     addTween(g.scale, "z", g.scale.z, 0.001, 260);
@@ -812,6 +1132,7 @@ const Board3D = (function () {
     if (checkGlowMesh) {
       checkGlowMesh.material.opacity = 0.2 + Math.abs(Math.sin(t * 3.2)) * 0.28;
     }
+    updateParticleSystems(dt, t);
 
     if (controls) controls.update();
     if (composer) composer.render();
@@ -822,6 +1143,7 @@ const Board3D = (function () {
   function init(container, opts) {
     opts = opts || {};
     onSquareClickCb = opts.onSquareClick || null;
+    if (opts.theme) currentTheme = opts.theme;
     ensureScene(container);
     active = true;
     prevLayout = {};
@@ -855,6 +1177,12 @@ const Board3D = (function () {
     checkGlowMesh = null;
     checkmateSpot = null;
     checkmateActive = false;
+    backdropGroup = null;
+    flickerLight = null;
+    starfieldPoints = null;
+    snowPoints = null;
+    ambientParticles = null;
+    captureBursts = [];
   }
 
   function sync(state) {
@@ -875,6 +1203,6 @@ const Board3D = (function () {
     return active;
   }
 
-  return { init, destroy, sync, isActive };
+  return { init, destroy, sync, isActive, setTheme };
 })();
 window.Board3D = Board3D;
