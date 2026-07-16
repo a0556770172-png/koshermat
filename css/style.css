@@ -769,3 +769,48 @@ table.lb td:first-child { font-weight: 800; color: var(--gold); }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 .section-title { font-size: 22px; font-weight: 800; margin: 0 0 16px; }
+
+/* ---------------- לוח תלת-ממדי פרימיום ---------------- */
+.board3d-toggle-btn {
+  left: auto; right: -6px;
+  background: linear-gradient(135deg, rgba(212,175,55,.25), rgba(212,175,55,.08));
+  border-color: rgba(212,175,55,.5);
+}
+.board3d-toggle-btn:hover { background: linear-gradient(135deg, rgba(212,175,55,.4), rgba(212,175,55,.15)); }
+.board3d-toggle-btn.active {
+  background: linear-gradient(135deg, #D4AF37, #b8912a);
+  color: #1a1400;
+  box-shadow: 0 0 14px rgba(212,175,55,.7);
+}
+.board-wrap:fullscreen .board3d-toggle-btn,
+.board-wrap:-webkit-full-screen .board3d-toggle-btn {
+  top: 10px; right: 10px; left: auto;
+}
+.board3d-container {
+  width: min(560px, 92vw);
+  height: min(560px, 92vw);
+  border-radius: 14px;
+  overflow: hidden;
+  position: relative;
+  background: radial-gradient(ellipse at center, #1a1712 0%, #05040a 100%);
+  box-shadow: 0 20px 60px rgba(0,0,0,.55), 0 0 0 1px rgba(212,175,55,.25);
+}
+.board-wrap:fullscreen .board3d-container,
+.board-wrap:-webkit-full-screen .board3d-container {
+  width: min(88vmin, 88vw);
+  height: min(88vmin, 88vw);
+}
+.board3d-container canvas { display: block; width: 100% !important; height: 100% !important; touch-action: none; }
+.board3d-loading {
+  position: absolute; inset: 0; z-index: 8;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
+  background: radial-gradient(ellipse at center, #1a1712 0%, #05040a 100%);
+  color: #D4AF37; font-weight: 700; border-radius: 14px;
+  width: min(560px, 92vw); height: min(560px, 92vw);
+  margin: 0 auto;
+}
+.board3d-spinner {
+  width: 40px; height: 40px; border-radius: 50%;
+  border: 3px solid rgba(212,175,55,.2); border-top-color: #D4AF37;
+  animation: spin .8s linear infinite;
+}
