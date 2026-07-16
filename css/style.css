@@ -519,8 +519,8 @@ label { font-size: 13px; color: var(--text-dim); margin-bottom: 6px; display: bl
 }
 .coord-rank { top: 3px; left: 4px; }
 .coord-file { bottom: 3px; right: 4px; }
-.square.light .coord-label { color: #8f5f30; }
-.square.dark .coord-label { color: #f0dcb4; }
+.square.light .coord-label { color: #4a4a4a; }
+.square.dark .coord-label { color: #cfcfcf; }
 
 .captured-tray {
   display: flex; align-items: center; gap: 1px; min-height: 20px; flex-wrap: wrap;
@@ -529,8 +529,8 @@ label { font-size: 13px; color: var(--text-dim); margin-bottom: 6px; display: bl
 .captured-advantage {
   font-size: 12px; font-weight: 800; color: var(--success); margin-right: 4px;
 }
-.square.light { background: linear-gradient(135deg, #f0dcb4, #e6cd9c); }
-.square.dark { background: linear-gradient(135deg, #a9773f, #8f5f30); }
+.square.light { background: linear-gradient(135deg, #ececeb, #d7d7d5); }
+.square.dark { background: linear-gradient(135deg, #2e2e2e, #191919); }
 .square.selected { box-shadow: inset 0 0 0 3px var(--accent-2); }
 .square.legal-move::after {
   content: "";
@@ -560,14 +560,14 @@ label { font-size: 13px; color: var(--text-dim); margin-bottom: 6px; display: bl
 /* צבע אמיתי וברור לכלים לבנים מול שחורים - כדי שאף פעם לא יהיה ספק
    מי שייך למי, גם על משבצת בהירה וגם על משבצת כהה */
 .piece-white {
-  color: #fbfbf7;
-  -webkit-text-stroke: 1.5px #232323;
-  text-stroke: 1.5px #232323;
+  color: #f3efe3;
+  -webkit-text-stroke: 1.5px #202020;
+  text-stroke: 1.5px #202020;
 }
 .piece-black {
-  color: #16130f;
-  -webkit-text-stroke: 1px #d8d0c0;
-  text-stroke: 1px #d8d0c0;
+  color: #141414;
+  -webkit-text-stroke: 1px #cfcfcf;
+  text-stroke: 1px #cfcfcf;
 }
 .square:hover .piece { transform: scale(1.08); }
 .piece.moving { animation: pieceDrop .28s ease; }
