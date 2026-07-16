@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 <title>משחק — כושרמט</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>♞</text></svg>">
-<link rel="stylesheet" href="css/style.css?v=30" />
+<link rel="stylesheet" href="css/style.css?v=31" />
 </head>
 <body>
   <nav class="navbar" id="navbar"></nav>
@@ -2372,6 +2372,12 @@ let gameEnded = false;
 let timerInterval = null;
 let pendingPromotion = null;
 
+// ---------------- משחק נגד המחשב (AI) ----------------
+let IS_AI_GAME = false;
+let AI_LEVEL = 10;
+let AI_WORKER = null;
+let AI_THINKING = false;
+
 // מזהה המשחק נשמר בזיכרון הדפדפן (לא בכתובת) כדי שהכתובת תישאר נקייה
 // (מותאם גם לרשתות עם סינון תוכן שחוסם כתובות עם מחרוזות מספרים ארוכות).
 // יש גם תמיכה בקישורים ישנים (#id או ?id=) למקרה שמישהו כבר שמר כאלה.
@@ -2386,6 +2392,13 @@ const GAME_ID =
     if (!auth) return;
     ME = auth.profile;
     renderNav("", ME);
+
+    const aiConfig = getAiConfig();
+    if (aiConfig) {
+      await initAiGame(aiConfig);
+      wireControls();
+      return;
+    }
 
     if (!GAME_ID) {
       showFatalError("לא נמצא מזהה משחק. אם הגעת לכאן ישירות (לא דרך כפתור באתר), חזור ללובי ונסה שוב.");
@@ -2480,7 +2493,7 @@ function updateTurnBanner() {
     text.textContent = "🟢 התור שלך למהלך";
     banner.classList.add("my-turn");
   } else {
-    text.textContent = `⏳ ממתין למהלך של היריב (${turnName})`;
+    text.textContent = IS_AI_GAME && AI_THINKING ? "🤖 המחשב חושב..." : `⏳ ממתין למהלך של היריב (${turnName})`;
     banner.classList.remove("my-turn");
   }
 }
@@ -2651,6 +2664,25 @@ async function makeMove(from, to, promotion) {
   const lastMoveAt = new Date(GAME.last_move_at).getTime();
   const elapsed = now - lastMoveAt;
 
+  if (IS_AI_GAME) {
+    if (move.color === "w") GAME.white_time_ms = Math.max(0, GAME.white_time_ms - elapsed);
+    else GAME.black_time_ms = Math.max(0, GAME.black_time_ms - elapsed);
+    GAME.fen = chess.fen();
+    GAME.pgn = chess.pgn();
+    GAME.turn = chess.turn();
+    GAME.last_move = move.san;
+    GAME.last_move_at = new Date().toISOString();
+
+    if (chess.in_checkmate()) {
+      aiFinishGame("checkmate", "me");
+    } else if (chess.in_draw() || chess.in_stalemate() || chess.in_threefold_repetition()) {
+      aiFinishGame("draw", null);
+    } else {
+      requestAiMove();
+    }
+    return;
+  }
+
   let whiteMs = GAME.white_time_ms;
   let blackMs = GAME.black_time_ms;
   if (move.color === "w") whiteMs = Math.max(0, whiteMs - elapsed);
@@ -2694,6 +2726,167 @@ async function makeMove(from, to, promotion) {
   } else if (chess.in_draw() || chess.in_stalemate() || chess.in_threefold_repetition()) {
     await finishGame("draw", null);
   }
+}
+
+// ==========================================================
+// משחק נגד המחשב - מנוע Stockfish אמיתי (רמות קושי 0-20 של המנוע
+// עצמו, לא סימולציה). הכל מתנהל מקומית בדפדפן בלי לגעת ב-Supabase
+// בכלל (אין שורת games במסד הנתונים למשחק כזה) - כדי לא להסתבך עם
+// יצירת "משתמש בוט" מזויף והרשאות RLS, ובעיקר כי אין צורך: המהלכים
+// של המחשב לא צריכים להסתנכרן בין דפדפנים, רק להיות מהירים ואמינים.
+// חשוב: משחק נגד המחשב לא נשמר בין רענוני דף - רענון מתחיל משחק חדש.
+// ==========================================================
+function getAiConfig() {
+  try {
+    const raw = sessionStorage.getItem("koshermat_ai_config");
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+async function initAiGame(config) {
+  IS_AI_GAME = true;
+  AI_LEVEL = Math.max(0, Math.min(20, parseInt(config.level, 10) || 10));
+  MY_COLOR = config.color === "random" ? (Math.random() < 0.5 ? "w" : "b") : config.color === "b" ? "b" : "w";
+
+  chess = new Chess();
+  const aiName = `מחשב (רמה ${AI_LEVEL})`;
+  GAME = {
+    id: "ai-local",
+    status: "active",
+    fen: chess.fen(),
+    pgn: "",
+    turn: "w",
+    white_id: MY_COLOR === "w" ? ME.id : null,
+    black_id: MY_COLOR === "b" ? ME.id : null,
+    white: MY_COLOR === "w" ? ME : { username: aiName, rating: null },
+    black: MY_COLOR === "b" ? ME : { username: aiName, rating: null },
+    white_time_ms: config.timeControlMs || 600000,
+    black_time_ms: config.timeControlMs || 600000,
+    time_control_ms: config.timeControlMs || 600000,
+    last_move: null,
+    last_move_at: new Date().toISOString(),
+    winner_id: null,
+    draw_offered_by: null,
+  };
+
+  // אין צ'אט/דיווח/הצעת תיקו במשחק נגד המחשב - אין עם מי "לדבר"
+  const chatCard = document.getElementById("chat-messages")?.closest(".card");
+  if (chatCard) chatCard.style.display = "none";
+  const reportCard = document.getElementById("report-btn")?.closest(".card");
+  if (reportCard) reportCard.style.display = "none";
+  const drawBtn = document.getElementById("draw-btn");
+  if (drawBtn) drawBtn.style.display = "none";
+
+  renderPlayers();
+  renderBoard();
+  renderMoveList();
+  renderCapturedPieces();
+  updateTimersDisplay();
+  updateControlsVisibility();
+  updateTurnBanner();
+  updateLastMoveInfo();
+  startTimerLoop();
+
+  initStockfish();
+
+  if (MY_COLOR === "b") {
+    requestAiMove();
+  }
+}
+
+function initStockfish() {
+  try {
+    AI_WORKER = new Worker("https://cdn.jsdelivr.net/npm/stockfish@16.1.0/src/stockfish-nnue-16-single.js#stockfish.wasm");
+  } catch (e) {
+    toast("מנוע השחמט לא נטען - בדוק את החיבור לאינטרנט ונסה לרענן את הדף", "error");
+    return;
+  }
+  AI_WORKER.onmessage = (e) => {
+    const line = typeof e.data === "string" ? e.data : e.data && e.data.data;
+    if (!line) return;
+    if (line.startsWith("bestmove")) {
+      const parts = line.split(" ");
+      const uciMove = parts[1];
+      if (!uciMove || uciMove === "(none)") return;
+      applyAiMove(uciMove);
+    }
+  };
+  AI_WORKER.onerror = () => {
+    toast("שגיאה בטעינת מנוע השחמט - בדוק את החיבור לאינטרנט ונסה שוב", "error");
+  };
+  AI_WORKER.postMessage("uci");
+}
+
+function requestAiMove() {
+  if (!AI_WORKER || gameEnded) return;
+  AI_THINKING = true;
+  updateTurnBanner();
+
+  const skill = AI_LEVEL;
+  // ככל שהרמה גבוהה יותר, נותנים למנוע יותר זמן חשיבה - כך שרמה 20
+  // באמת חושבת עמוק ומשחקת חזק בצורה יוצאת דופן, לא רק "מדמה" קושי
+  const moveTimeMs = 250 + skill * 180;
+
+  AI_WORKER.postMessage("setoption name Skill Level value " + skill);
+  AI_WORKER.postMessage("position fen " + chess.fen());
+  AI_WORKER.postMessage("go movetime " + moveTimeMs);
+}
+
+function applyAiMove(uciMove) {
+  AI_THINKING = false;
+  const from = uciMove.slice(0, 2);
+  const to = uciMove.slice(2, 4);
+  const promotion = uciMove.length > 4 ? uciMove.slice(4, 5) : undefined;
+  const move = chess.move({ from, to, promotion });
+  if (!move) return;
+
+  lastMoveSquares = [from, to];
+  renderBoard();
+  renderMoveList();
+  renderCapturedPieces();
+  updateTurnBanner();
+  updateLastMoveInfo();
+
+  if (move.captured) {
+    playCaptureSound();
+  } else {
+    playMoveSound();
+  }
+  if (chess.in_check()) {
+    playCheckSound();
+  }
+
+  const now = Date.now();
+  const lastMoveAt = new Date(GAME.last_move_at).getTime();
+  const elapsed = now - lastMoveAt;
+  if (move.color === "w") GAME.white_time_ms = Math.max(0, GAME.white_time_ms - elapsed);
+  else GAME.black_time_ms = Math.max(0, GAME.black_time_ms - elapsed);
+  GAME.fen = chess.fen();
+  GAME.pgn = chess.pgn();
+  GAME.turn = chess.turn();
+  GAME.last_move = move.san;
+  GAME.last_move_at = new Date().toISOString();
+
+  if (chess.in_checkmate()) {
+    aiFinishGame("checkmate", "ai");
+  } else if (chess.in_draw() || chess.in_stalemate() || chess.in_threefold_repetition()) {
+    aiFinishGame("draw", null);
+  }
+}
+
+function aiFinishGame(status, winner) {
+  if (gameEnded) return;
+  gameEnded = true;
+  GAME.status = status;
+  GAME.winner_id = winner === "me" ? ME.id : winner === "ai" ? "ai-opponent" : null;
+  if (AI_WORKER) {
+    try { AI_WORKER.postMessage("quit"); AI_WORKER.terminate(); } catch (e) { /* ignore */ }
+  }
+  updateTurnBanner();
+  updateControlsVisibility();
+  showEndOverlay();
 }
 
 async function finishGame(status, winnerId) {
@@ -2916,6 +3109,10 @@ function renderDrawBanner() {
 function wireControls() {
   document.getElementById("resign-btn").addEventListener("click", async () => {
     if (!confirm("האם אתה בטוח שברצונך להיכנע?")) return;
+    if (IS_AI_GAME) {
+      aiFinishGame("resigned", "ai");
+      return;
+    }
     const winnerId = MY_COLOR === "w" ? GAME.black_id : GAME.white_id;
     await finishGame("resigned", winnerId);
   });

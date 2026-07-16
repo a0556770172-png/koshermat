@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>גישת חירום — כושרמט</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>♞</text></svg>">
-<link rel="stylesheet" href="css/style.css?v=30" />
+<link rel="stylesheet" href="css/style.css?v=31" />
 </head>
 <body>
   <div class="center-page page-enter">
@@ -275,18 +275,66 @@ async function requireAuth(redirectIfBanned = true) {
   }
 
   listenForGameInvites(profile.id);
+  initPresence(profile.id);
 
   return { session, profile };
 }
+
+// ---------------- נוכחות אונליין (מי מחובר כרגע לאתר) ----------------
+// ערוץ Presence משותף לכל האתר - כל דף מחובר (לובי, פרופיל, הודעות וכו')
+// "מדווח" שהוא מחובר, כדי שרשימת "שחקנים מחוברים" תהיה מדויקת ולא
+// תסתמך רק על מי שנמצא כרגע בדף הלובי הספציפי.
+let presenceChannel = null;
+const onlineUserIds = new Set();
+
+function initPresence(userId) {
+  if (presenceChannel || !userId) return;
+  try {
+    presenceChannel = sb.channel("online-users", {
+      config: { presence: { key: userId } },
+    });
+
+    presenceChannel
+      .on("presence", { event: "sync" }, () => {
+        const state = presenceChannel.presenceState();
+        onlineUserIds.clear();
+        Object.keys(state).forEach((id) => onlineUserIds.add(id));
+      })
+      .subscribe(async (status) => {
+        if (status === "SUBSCRIBED") {
+          try {
+            await presenceChannel.track({ online_at: new Date().toISOString() });
+          } catch (e) { /* לא קריטי אם המעקב נכשל */ }
+        }
+      });
+  } catch (e) {
+    // לא קריטי - אם Presence נכשל, פשוט לא תהיה רשימת "מחוברים" מדויקת
+  }
+}
+window.getOnlineUserIds = () => onlineUserIds;
 
 // ---------------- ניווט למשחק בלי מזהה בכתובת ----------------
 // כדי שהכתובת תישאר נקייה (game.html בלבד, בלי id/# עם מספרים) -
 // שומרים את מזהה המשחק בזיכרון הדפדפן (sessionStorage) ולא בכתובת עצמה.
 function goToGame(gameId) {
+  // חשוב: מנקים הגדרות משחק-נגד-מחשב ישנות אם היו, אחרת דף המשחק
+  // עלול "לחשוב" בטעות שזה עדיין משחק AI ולהתעלם ממזהה המשחק האמיתי
+  sessionStorage.removeItem("koshermat_ai_config");
   sessionStorage.setItem("koshermat_game_id", gameId);
   location.href = "board.html";
 }
 window.goToGame = goToGame;
+
+// ---------------- ניווט למשחק נגד המחשב ----------------
+function goToAiGame(level, color, timeControlMs) {
+  sessionStorage.removeItem("koshermat_game_id");
+  sessionStorage.setItem(
+    "koshermat_ai_config",
+    JSON.stringify({ level, color, timeControlMs: timeControlMs || 600000 })
+  );
+  location.href = "board.html";
+}
+window.goToAiGame = goToAiGame;
 
 // ---------------- ניווט להודעה פרטית עם משתמש (בלי מזהה בכתובת) ----------------
 function openDM(userId, username) {
@@ -380,6 +428,207 @@ function challengeWithTimeControl(myId, targetId, targetName) {
   openTimeControlModal((ms) => sendGameInvite(myId, targetId, targetName, ms));
 }
 window.challengeWithTimeControl = challengeWithTimeControl;
+
+// ---------------- בחירת יריב: שחקן אמיתי או מחשב ----------------
+function openFindOpponentModal(myProfile) {
+  const old = document.getElementById("find-opponent-overlay");
+  if (old) old.remove();
+
+  const overlay = document.createElement("div");
+  overlay.className = "overlay";
+  overlay.id = "find-opponent-overlay";
+  overlay.innerHTML = `
+    <div class="card text-center" style="max-width:460px;">
+      <div class="section-title" style="margin-bottom:4px;">🎮 איך תרצה לשחק?</div>
+      <p class="muted" style="font-size:13px; margin-bottom:16px;">בחר נגד מי לשחק הפעם</p>
+      <div class="opponent-choice-grid">
+        <button class="opponent-choice-card" id="choice-real-player">
+          <span class="opponent-choice-icon">🧑</span>
+          <span class="opponent-choice-title">שחקן אמיתי</span>
+          <span class="opponent-choice-sub">אתגר שחקנים מחוברים או לא מחוברים</span>
+        </button>
+        <button class="opponent-choice-card" id="choice-vs-ai">
+          <span class="opponent-choice-icon">🤖</span>
+          <span class="opponent-choice-title">נגד המחשב</span>
+          <span class="opponent-choice-sub">מנוע שחמט אמיתי, 20 רמות קושי</span>
+        </button>
+      </div>
+      <button class="btn btn-ghost btn-block mt-2" id="find-opponent-cancel">ביטול</button>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  document.getElementById("find-opponent-cancel").addEventListener("click", () => overlay.remove());
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) overlay.remove();
+  });
+  document.getElementById("choice-real-player").addEventListener("click", () => {
+    overlay.remove();
+    openRealPlayerModal(myProfile);
+  });
+  document.getElementById("choice-vs-ai").addEventListener("click", () => {
+    overlay.remove();
+    openAiDifficultyModal(myProfile);
+  });
+}
+window.openFindOpponentModal = openFindOpponentModal;
+
+// ---------------- רשימת שחקנים (מחוברים/לא מחוברים) לאתגור ----------------
+async function openRealPlayerModal(myProfile) {
+  const old = document.getElementById("real-player-overlay");
+  if (old) old.remove();
+
+  const overlay = document.createElement("div");
+  overlay.className = "overlay";
+  overlay.id = "real-player-overlay";
+  overlay.innerHTML = `
+    <div class="card" style="max-width:480px; max-height:82vh; overflow-y:auto; text-align:right;">
+      <div class="flex" style="justify-content:space-between; align-items:center;">
+        <div class="section-title" style="margin:0;">🧑 שחק נגד שחקן אמיתי</div>
+        <button class="btn btn-ghost" id="real-player-back" style="padding:6px 12px; font-size:12px;">→ חזרה</button>
+      </div>
+      <button class="btn btn-primary btn-block mt-2" id="quick-match-btn">🎲 התאמה אוטומטית מהירה</button>
+      <div class="mt-2">
+        <div class="section-title" style="font-size:14px;">🟢 מחוברים כרגע</div>
+        <div id="online-players-list" class="flex flex-col gap-1"><p class="muted text-center" style="font-size:12px;">טוען...</p></div>
+      </div>
+      <div class="mt-2">
+        <div class="section-title" style="font-size:14px;">⚪ לא מחוברים</div>
+        <div id="offline-players-list" class="flex flex-col gap-1"></div>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  document.getElementById("real-player-back").addEventListener("click", () => {
+    overlay.remove();
+    openFindOpponentModal(myProfile);
+  });
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) overlay.remove();
+  });
+  document.getElementById("quick-match-btn").addEventListener("click", () => {
+    overlay.remove();
+    if (window.toggleSearch) window.toggleSearch();
+  });
+
+  const { data, error } = await sb
+    .from("profiles")
+    .select("id, username, avatar_emoji, rating")
+    .neq("id", myProfile.id)
+    .eq("is_banned", false)
+    .order("rating", { ascending: false })
+    .limit(200);
+
+  if (error) {
+    toast("שגיאה בטעינת רשימת השחקנים: " + error.message, "error");
+    return;
+  }
+
+  const players = data || [];
+  const online = window.getOnlineUserIds ? window.getOnlineUserIds() : new Set();
+  const onlinePlayers = players.filter((p) => online.has(p.id));
+  const offlinePlayers = players.filter((p) => !online.has(p.id));
+
+  renderPlayerChallengeList("online-players-list", onlinePlayers, myProfile, "אין כרגע שחקנים אחרים מחוברים");
+  renderPlayerChallengeList("offline-players-list", offlinePlayers, myProfile, "כל השחקנים הרשומים מחוברים כרגע!");
+}
+window.openRealPlayerModal = openRealPlayerModal;
+
+function renderPlayerChallengeList(elementId, players, myProfile, emptyMsg) {
+  const box = document.getElementById(elementId);
+  if (!box) return;
+  if (!players.length) {
+    box.innerHTML = `<p class="muted text-center" style="font-size:12px;">${emptyMsg}</p>`;
+    return;
+  }
+  box.innerHTML = players
+    .map(
+      (p) => `
+    <div class="game-list-item">
+      <span>${p.avatar_emoji || "♟️"} <b>${escapeHtml(p.username)}</b> <span class="muted" style="font-size:12px;">(${p.rating})</span></span>
+      <button class="btn btn-ghost" style="padding:5px 12px; font-size:12px;" onclick="challengeWithTimeControl('${myProfile.id}','${p.id}','${escapeHtml(p.username)}')">⚔️ אתגר</button>
+    </div>`
+    )
+    .join("");
+}
+
+// ---------------- בחירת רמת קושי + צבע למשחק נגד המחשב ----------------
+function openAiDifficultyModal(myProfile) {
+  const old = document.getElementById("ai-difficulty-overlay");
+  if (old) old.remove();
+
+  const overlay = document.createElement("div");
+  overlay.className = "overlay";
+  overlay.id = "ai-difficulty-overlay";
+  overlay.innerHTML = `
+    <div class="card text-center" style="max-width:440px;">
+      <div class="flex" style="justify-content:space-between; align-items:center;">
+        <div class="section-title" style="margin:0;">🤖 נגד המחשב</div>
+        <button class="btn btn-ghost" id="ai-modal-back" style="padding:6px 12px; font-size:12px;">→ חזרה</button>
+      </div>
+      <p class="muted" style="font-size:13px; margin:10px 0;">מנוע שחמט אמיתי - לא סימולציה. רמה 20 היא כמעט בלתי אפשרית לניצחון.</p>
+      <div class="ai-level-display" id="ai-level-display">רמה 10</div>
+      <div class="muted" id="ai-level-tier" style="font-size:13px; margin-bottom:10px;"></div>
+      <input type="range" min="0" max="20" value="10" id="ai-level-slider" class="ai-level-slider" />
+      <div class="flex" style="justify-content:space-between; font-size:11px; color:var(--text-dim); margin-top:4px;">
+        <span>קל</span><span>בלתי אפשרי</span>
+      </div>
+      <div class="section-title" style="font-size:14px; margin-top:18px;">באיזה צבע תרצה לשחק?</div>
+      <div class="ai-color-grid" id="ai-color-grid">
+        <button class="ai-color-btn active" type="button" data-color="w">⚪ לבן</button>
+        <button class="ai-color-btn" type="button" data-color="b">⚫ שחור</button>
+        <button class="ai-color-btn" type="button" data-color="random">🎲 אקראי</button>
+      </div>
+      <button class="btn btn-primary btn-block mt-2" id="ai-start-btn">התחל משחק</button>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  document.getElementById("ai-modal-back").addEventListener("click", () => {
+    overlay.remove();
+    openFindOpponentModal(myProfile);
+  });
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) overlay.remove();
+  });
+
+  const tierOf = (lvl) => {
+    if (lvl <= 4) return "🟢 קל";
+    if (lvl <= 9) return "🟡 בינוני";
+    if (lvl <= 14) return "🟠 קשה";
+    if (lvl <= 18) return "🔴 מומחה";
+    return "⚫ כמעט בלתי אפשרי";
+  };
+
+  const slider = document.getElementById("ai-level-slider");
+  const display = document.getElementById("ai-level-display");
+  const tierEl = document.getElementById("ai-level-tier");
+  const updateLevel = () => {
+    display.textContent = `רמה ${slider.value}`;
+    tierEl.textContent = tierOf(parseInt(slider.value, 10));
+  };
+  updateLevel();
+  slider.addEventListener("input", updateLevel);
+
+  let selectedColor = "w";
+  overlay.querySelectorAll(".ai-color-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      selectedColor = btn.dataset.color;
+      overlay.querySelectorAll(".ai-color-btn").forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+    });
+  });
+
+  document.getElementById("ai-start-btn").addEventListener("click", () => {
+    const level = parseInt(slider.value, 10);
+    overlay.remove();
+    openTimeControlModal((ms) => {
+      goToAiGame(level, selectedColor, ms);
+    });
+  });
+}
+window.openAiDifficultyModal = openAiDifficultyModal;
 
 const handledInviteUpdates = new Set();
 

@@ -607,6 +607,39 @@ label { font-size: 13px; color: var(--text-dim); margin-bottom: 6px; display: bl
 .time-control-btn .tc-label { font-size: 18px; font-weight: 800; }
 .time-control-btn .tc-sub { font-size: 12px; color: var(--text-dim); }
 
+/* ---------------- בחירת יריב: שחקן אמיתי / מחשב ---------------- */
+.opponent-choice-grid {
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;
+}
+.opponent-choice-card {
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: 22px 12px; border-radius: 14px;
+  border: 1px solid var(--glass-border); background: var(--glass);
+  color: var(--text); cursor: pointer; font-family: inherit;
+  transition: background .18s ease, transform .15s ease, border-color .18s ease;
+}
+.opponent-choice-card:hover {
+  background: rgba(255,255,255,.1); transform: translateY(-3px);
+  border-color: var(--accent-2);
+}
+.opponent-choice-icon { font-size: 40px; }
+.opponent-choice-title { font-size: 16px; font-weight: 800; }
+.opponent-choice-sub { font-size: 11px; color: var(--text-dim); text-align: center; }
+
+/* ---------------- רמת קושי נגד המחשב ---------------- */
+.ai-level-display { font-size: 30px; font-weight: 900; color: var(--accent-2); margin-top: 6px; }
+.ai-level-slider {
+  width: 100%; margin-top: 6px; accent-color: var(--accent-2); cursor: pointer;
+}
+.ai-color-grid { display: flex; gap: 8px; justify-content: center; margin-top: 10px; }
+.ai-color-btn {
+  padding: 10px 16px; border-radius: 10px; border: 1px solid var(--glass-border);
+  background: var(--glass); color: var(--text); cursor: pointer; font-family: inherit;
+  font-weight: 700; font-size: 13px; transition: background .18s ease, border-color .18s ease;
+}
+.ai-color-btn:hover { background: rgba(255,255,255,.12); }
+.ai-color-btn.active { border-color: var(--accent-2); background: rgba(0,229,199,.18); }
+
 .overlay {
   position: fixed; inset: 0; background: rgba(5,7,16,.75);
   display: flex; align-items: center; justify-content: center; z-index: 200;

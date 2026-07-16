@@ -22,7 +22,13 @@ let queueChannel = null;
   await loadDailyChallenges();
   claimDailyReward();
 
-  document.getElementById("find-btn").addEventListener("click", toggleSearch);
+  document.getElementById("find-btn").addEventListener("click", () => {
+    if (searching) {
+      toggleSearch();
+    } else {
+      openFindOpponentModal(ME);
+    }
+  });
 })();
 
 function renderProfileCard(p) {
